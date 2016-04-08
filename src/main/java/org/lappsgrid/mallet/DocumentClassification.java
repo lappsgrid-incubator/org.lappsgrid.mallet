@@ -2,19 +2,18 @@ package org.lappsgrid.mallet;
 
 
 
+import cc.mallet.classify.Classifier;
+import cc.mallet.pipe.iterator.CsvIterator;
+import cc.mallet.types.Labeling;
 import org.lappsgrid.api.ProcessingService;
 import org.lappsgrid.discriminator.Discriminators.Uri;
 import org.lappsgrid.metadata.IOSpecification;
 import org.lappsgrid.metadata.ServiceMetadata;
 import org.lappsgrid.serialization.Data;
-import org.lappsgrid.serialization.DataContainer;
-import org.lappsgrid.serialization.Serializer;
-import org.lappsgrid.serialization.lif.Annotation;
-import org.lappsgrid.serialization.lif.Container;
-import org.lappsgrid.serialization.lif.View;
-import org.lappsgrid.vocabulary.Features;
 
-import java.util.Map;
+import java.io.*;
+import java.util.Iterator;
+
 
 public class DocumentClassification implements ProcessingService
 {
@@ -26,7 +25,7 @@ public class DocumentClassification implements ProcessingService
 
         // Populate metadata using setX() methods
         metadata.setName(this.getClass().getName());
-        metadata.setDescription("Whitespace tokenizer");
+        metadata.setDescription("Mallet Document Classifier");
         metadata.setVersion("1.0.0-SNAPSHOT");
         metadata.setVendor("http://www.lappsgrid.org");
         metadata.setLicense(Uri.APACHE2);
@@ -56,58 +55,80 @@ public class DocumentClassification implements ProcessingService
     }
 
     public String execute(String input) {
-        // Step #1: Parse the input.
-        Data data = Serializer.parse(input, Data.class);
-
-        // Step #2: Check the discriminator
-        final String discriminator = data.getDiscriminator();
-        if (discriminator.equals(Uri.ERROR)) {
-            // Return the input unchanged.
-            return input;
+        // convert strings of file names in File objects
+        File classifierFile = new File("masc_500k_texts.classifier");
+        File inputFile = new File(input);
+        try
+        {
+            // load the classifier and guess the labeling of the input file
+            Classifier classifier = loadClassifier(classifierFile);
+            printLabelings(classifier, inputFile);
         }
-
-        // Step #3: Extract the text.
-        Container container = null;
-        if (discriminator.equals(Uri.TEXT)) {
-            container = new Container();
-            container.setText(data.getPayload().toString());
+        catch (IOException e)
+        {
+            System.out.println("File not found.");
+            System.out.println(inputFile.getAbsolutePath());
         }
-        else if (discriminator.equals(Uri.LAPPS)) {
-            container = new Container((Map) data.getPayload());
+        catch (ClassNotFoundException e)
+        {
+            System.out.println("ClassNotFoundException");
         }
-        else {
-            // This is a format we don't accept.
-            String message = String.format("Unsupported discriminator type: %s", discriminator);
-            return new Data<String>(Uri.ERROR, message).asJson();
-        }
+        return null;
+    }
 
-        // Step #4: Create a new View
-        View view = container.newView();
+    public Classifier loadClassifier(File serializedFile)
+            throws IOException, ClassNotFoundException {
 
-        // Step #5: Tokenize the text and add annotations.
-        String text = container.getText();
-        String[] words = text.split("\\s+");
-        int id = -1;
-        int start = 0;
-        for (String word : words) {
-            start = text.indexOf(word, start);
-            if (start < 0) {
-                return new Data<String>(Uri.ERROR, "Unable to match word: " + word).asJson();
+        // The standard way to save classifiers and Mallet data
+        //  for repeated use is through Java serialization.
+        // Here we load a serialized classifier from a file.
+
+        Classifier classifier;
+
+        ObjectInputStream ois =
+                new ObjectInputStream(new FileInputStream(serializedFile));
+        classifier = (Classifier) ois.readObject();
+        ois.close();
+
+        return classifier;
+    }
+
+    public void printLabelings(Classifier classifier, File file) throws IOException {
+
+        // Create a new iterator that will read raw instance data from
+        //  the lines of a file.
+        // Lines should be formatted as:
+        //
+        //   [name] [label] [data ... ]
+        //
+        //  in this case, "label" is ignored.
+
+        CsvIterator reader =
+                new CsvIterator(new FileReader(file),
+                        "(\\w+)\\s+(\\w+)\\s+(.*)",
+                        3, 2, 1);  // (data, label, name) field indices
+
+        // Create an iterator that will pass each instance through
+        //  the same pipe that was used to create the training data
+        //  for the classifier.
+        Iterator instances =
+                classifier.getInstancePipe().newIteratorFrom(reader);
+
+        // Classifier.classify() returns a Classification object
+        //  that includes the instance, the classifier, and the
+        //  classification results (the labeling). Here we only
+        //  care about the Labeling.
+        while (instances.hasNext()) {
+            Labeling labeling = classifier.classify(instances.next()).getLabeling();
+
+            // print the labels with their weights in descending order (ie best first)
+
+            for (int rank = 0; rank < labeling.numLocations(); rank++){
+                System.out.println(labeling.getLabelAtRank(rank) + ":" +
+                        labeling.getValueAtRank(rank) + " ");
             }
-            int end = start + word.length();
-            Annotation a = view.newAnnotation("tok" + (++id), Uri.TOKEN, start, end);
-            a.addFeature(Features.Token.WORD, word);
+            System.out.println();
+
         }
-
-        // Step #6: Update the view's metadata. Each view contains metadata about the
-        // annotations it contains, in particular the name of the tool that produced the
-        // annotations.
-        view.addContains(Uri.TOKEN, this.getClass().getName(), "whitespace");
-
-        // Step #7: Create a DataContainer with the result.
-        data = new DataContainer(container);
-
-        // Step #8: Serialize the data object and return the JSON.
-        return data.asJson();
     }
 }
