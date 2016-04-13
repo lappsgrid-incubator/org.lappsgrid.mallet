@@ -1,10 +1,7 @@
 package org.lappsgrid.mallet;
 
-import cc.mallet.classify.Classifier;
-import cc.mallet.fst.CRF;
-import cc.mallet.fst.MultiSegmentationEvaluator;
-import cc.mallet.fst.TransducerEvaluator;
-import cc.mallet.fst.TransducerTrainer;
+import cc.mallet.fst.*;
+import cc.mallet.optimize.Optimizable;
 import cc.mallet.pipe.*;
 import cc.mallet.pipe.iterator.FileIterator;
 import cc.mallet.types.InstanceList;
@@ -18,10 +15,10 @@ import java.io.*;
 import java.util.ArrayList;
 import java.util.regex.Pattern;
 
+public class TrainSequenceTagging implements ProcessingService {
 
-public class SequenceTagging implements ProcessingService
-{
-    public SequenceTagging() { }
+    public TrainSequenceTagging() {
+    }
 
     private String generateMetadata() {
         // Create and populate the metadata object
@@ -29,7 +26,7 @@ public class SequenceTagging implements ProcessingService
 
         // Populate metadata using setX() methods
         metadata.setName(this.getClass().getName());
-        metadata.setDescription("Mallet Sequence Tagging");
+        metadata.setDescription("Mallet Sequence Tagging Trainer");
         metadata.setVersion("1.0.0-SNAPSHOT");
         metadata.setVendor("http://www.lappsgrid.org");
         metadata.setLicense(Discriminators.Uri.APACHE2);
@@ -60,46 +57,13 @@ public class SequenceTagging implements ProcessingService
 
     public String execute(String input) {
         pipe = buildPipe();
-        String[] labels = new String[]{"I-PER", "I-LOC", "I-ORG", "I-MISC"};
+        InstanceList instances = readDirectory(new File(input));
         try {
-            CRF crf = loadModel(new File("sequence tagging data.model"));
-            InstanceList instanceList = readDirectory(new File(input));
-            TransducerEvaluator evaluator = new MultiSegmentationEvaluator(
-                    new InstanceList[]{instanceList},
-                    new String[]{"test"}, labels, labels) {
-                @Override
-                public boolean precondition(TransducerTrainer tt) {
-                    // evaluate model every 5 training iterations
-                    return tt.getIteration() % 5 == 0;
-                }};
-                crf.induceFeaturesFor(instanceList);
-
+            trainSequenceTagging(instances, input);
+        } catch (IOException e) {
+            System.out.println("Classifier file cannot be written.");
         }
-        catch (IOException e) {
-            System.out.println("Can't load model");
-        }
-        catch (ClassNotFoundException e) {
-            System.out.println("Can't load model");
-        }
-
         return null;
-           }
-
-    public CRF loadModel(File serializedFile)
-            throws IOException, ClassNotFoundException {
-
-        // The standard way to save classifiers and Mallet data
-        //  for repeated use is through Java serialization.
-        // Here we load a serialized classifier from a file.
-
-        CRF crf;
-
-        ObjectInputStream ois =
-                new ObjectInputStream(new FileInputStream(serializedFile));
-        crf = (CRF) ois.readObject();
-        ois.close();
-
-        return crf;
     }
 
     Pipe pipe;
@@ -108,6 +72,17 @@ public class SequenceTagging implements ProcessingService
 
         // Read data from File objects
         pipeList.add(new Input2CharSequence("UTF-8"));
+
+        // Regular expression for what constitutes a token.
+        //  This pattern includes Unicode letters, Unicode numbers,
+        //   and the underscore character. Alternatives:
+        //    "\\S+"   (anything not whitespace)
+        //    "\\w+"    ( A-Z, a-z, 0-9, _ )
+        //    "[\\p{L}\\p{N}_]+|[\\p{P}]+"   (a group of only letters and numbers OR
+        //                                    a group of only punctuation marks)
+        Pattern tokenPattern =
+                Pattern.compile("[\\p{L}\\p{N}_]+");
+
         pipeList.add(new StringBuffer2String());
         pipeList.add(new SimpleTaggerSentence2TokenSequence());
         pipeList.add(new TokenSequenceLowercase());
@@ -119,7 +94,7 @@ public class SequenceTagging implements ProcessingService
     }
 
     public InstanceList readDirectory(File directory) {
-        return readDirectories(new File[] {directory});
+        return readDirectories(new File[]{directory});
     }
 
     public InstanceList readDirectories(File[] directories) {
@@ -148,14 +123,65 @@ public class SequenceTagging implements ProcessingService
 
     class TxtFilter implements FileFilter {
 
-        /** Test whether the string representation of the file
-         *   ends with the correct extension. Note that {@ref FileIterator}
-         *   will only call this filter if the file is not a directory,
-         *   so we do not need to test that it is a file.
+        /**
+         * Test whether the string representation of the file
+         * ends with the correct extension. Note that {@ref FileIterator}
+         * will only call this filter if the file is not a directory,
+         * so we do not need to test that it is a file.
          */
         public boolean accept(File file) {
             return file.toString().endsWith(".txt");
         }
     }
 
+    public void trainSequenceTagging(InstanceList trainingData, String input)
+            throws IOException {
+        // setup:
+        //    CRF (model) and the state machine
+        //    CRFOptimizableBy* objects (terms in the objective function)
+        //    CRF trainer
+        //    evaluator and writer
+
+        // model
+        CRF crf = new CRF(trainingData.getDataAlphabet(),
+                trainingData.getTargetAlphabet());
+        // construct the finite state machine
+        crf.addFullyConnectedStatesForLabels();
+        // initialize model's weights
+        crf.setWeightsDimensionAsIn(trainingData, false);
+
+        //  CRFOptimizableBy* objects (terms in the objective function)
+        // objective 1: label likelihood objective
+        CRFOptimizableByLabelLikelihood optLabel =
+                new CRFOptimizableByLabelLikelihood(crf, trainingData);
+
+        // CRF trainer
+        Optimizable.ByGradientValue[] opts =
+                new Optimizable.ByGradientValue[]{optLabel};
+        // by default, use L-BFGS as the optimizer
+        CRFTrainerByValueGradients crfTrainer =
+                new CRFTrainerByValueGradients(crf, opts);
+
+        // *Note*: labels can also be obtained from the target alphabet
+        String[] labels = new String[]{"I-PER", "I-LOC", "I-ORG", "I-MISC"};
+
+        CRFWriter crfWriter = new CRFWriter(input + ".model") {
+            @Override
+            public boolean precondition(TransducerTrainer tt) {
+                // save the trained model after training finishes
+                return tt.getIteration() % Integer.MAX_VALUE == 0;
+            }
+        };
+        crfTrainer.addEvaluator(crfWriter);
+
+        // all setup done, train until convergence
+        crfTrainer.setMaxResets(0);
+        crfTrainer.train(trainingData, Integer.MAX_VALUE);
+
+
+        // save the trained model (if CRFWriter is not used)
+        FileOutputStream fos = new FileOutputStream(input + ".model");
+        ObjectOutputStream oos = new ObjectOutputStream(fos);
+        oos.writeObject(crf);
+    }
 }
