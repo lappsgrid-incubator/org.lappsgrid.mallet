@@ -1,9 +1,15 @@
 package org.lappsgrid.mallet;
 
 import cc.mallet.fst.*;
+import cc.mallet.fst.tests.TestCRF;
 import cc.mallet.optimize.Optimizable;
+import cc.mallet.optimize.tests.TestOptimizable;
 import cc.mallet.pipe.*;
+import cc.mallet.pipe.iterator.ArrayIterator;
 import cc.mallet.pipe.iterator.FileIterator;
+import cc.mallet.pipe.tsf.OffsetConjunctions;
+import cc.mallet.pipe.tsf.TokenText;
+import cc.mallet.types.Instance;
 import cc.mallet.types.InstanceList;
 import org.lappsgrid.api.ProcessingService;
 import org.lappsgrid.discriminator.Discriminators;
@@ -58,10 +64,14 @@ public class TrainSequenceTagging implements ProcessingService {
     public String execute(String input) {
         pipe = buildPipe();
         InstanceList instances = readDirectory(new File(input));
+        System.out.println("Vector data");
+        for (Instance instance : instances) {
+            System.out.println(instance.getData());
+        }
         try {
             trainSequenceTagging(instances, input);
         } catch (IOException e) {
-            System.out.println("Classifier file cannot be written.");
+            System.out.println("Model file cannot be written.");
         }
         return null;
     }
@@ -84,11 +94,10 @@ public class TrainSequenceTagging implements ProcessingService {
                 Pattern.compile("[\\p{L}\\p{N}_]+");
 
         pipeList.add(new StringBuffer2String());
-        pipeList.add(new SimpleTaggerSentence2TokenSequence());
+        pipeList.add(new SimpleTaggerSentence2TokenSequence(true));
         pipeList.add(new TokenSequenceLowercase());
-        pipeList.add(new TokenSequenceRemoveStopwords(false,false));
         pipeList.add(new TokenSequence2FeatureVectorSequence());
-        pipeList.add(new PrintInput());
+        pipeList.add(new PrintInputAndTarget());
 
         return new SerialPipes(pipeList);
     }
@@ -148,7 +157,7 @@ public class TrainSequenceTagging implements ProcessingService {
         // construct the finite state machine
         crf.addFullyConnectedStatesForLabels();
         // initialize model's weights
-        crf.setWeightsDimensionAsIn(trainingData, false);
+        crf.setWeightsDimensionAsIn(trainingData);
 
         //  CRFOptimizableBy* objects (terms in the objective function)
         // objective 1: label likelihood objective
@@ -161,9 +170,6 @@ public class TrainSequenceTagging implements ProcessingService {
         // by default, use L-BFGS as the optimizer
         CRFTrainerByValueGradients crfTrainer =
                 new CRFTrainerByValueGradients(crf, opts);
-
-        // *Note*: labels can also be obtained from the target alphabet
-        String[] labels = new String[]{"I-PER", "I-LOC", "I-ORG", "I-MISC"};
 
         CRFWriter crfWriter = new CRFWriter(input + ".model") {
             @Override

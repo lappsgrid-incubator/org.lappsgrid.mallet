@@ -30,6 +30,6 @@ public class TestTrainSequenceTagging {
 
     @Test
     public void testExecute() {
-        String string = this.service.execute("sequence tagging data");
+        String string = this.service.execute("dataCOPY");
     }
 }

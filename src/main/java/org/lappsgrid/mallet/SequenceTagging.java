@@ -1,13 +1,10 @@
 package org.lappsgrid.mallet;
 
-import cc.mallet.classify.Classifier;
-import cc.mallet.fst.CRF;
-import cc.mallet.fst.MultiSegmentationEvaluator;
-import cc.mallet.fst.TransducerEvaluator;
-import cc.mallet.fst.TransducerTrainer;
+import cc.mallet.extract.StringTokenization;
+import cc.mallet.fst.*;
 import cc.mallet.pipe.*;
 import cc.mallet.pipe.iterator.FileIterator;
-import cc.mallet.types.InstanceList;
+import cc.mallet.types.*;
 import org.lappsgrid.api.ProcessingService;
 import org.lappsgrid.discriminator.Discriminators;
 import org.lappsgrid.metadata.IOSpecification;
@@ -17,6 +14,8 @@ import org.lappsgrid.serialization.Data;
 import java.io.*;
 import java.util.ArrayList;
 import java.util.regex.Pattern;
+
+import static cc.mallet.fst.SimpleTagger.apply;
 
 
 public class SequenceTagging implements ProcessingService
@@ -60,19 +59,33 @@ public class SequenceTagging implements ProcessingService
 
     public String execute(String input) {
         pipe = buildPipe();
-        String[] labels = new String[]{"I-PER", "I-LOC", "I-ORG", "I-MISC"};
         try {
-            CRF crf = loadModel(new File("sequence tagging data.model"));
-            InstanceList instanceList = readDirectory(new File(input));
-            TransducerEvaluator evaluator = new MultiSegmentationEvaluator(
-                    new InstanceList[]{instanceList},
-                    new String[]{"test"}, labels, labels) {
-                @Override
-                public boolean precondition(TransducerTrainer tt) {
-                    // evaluate model every 5 training iterations
-                    return tt.getIteration() % 5 == 0;
-                }};
-                crf.induceFeaturesFor(instanceList);
+            CRF crf = loadModel(new File("dataCOPY.model"));
+            InstanceList instances = readDirectory(new File(input));
+            for (Instance instance : instances) {
+                StringTokenization stringTokenization = (StringTokenization) instance.getData();
+
+                Token[] tokens = new Token[stringTokenization.size()];
+                String[] strings = new String[stringTokenization.size()];
+
+                for (int i = 0 ; i < tokens.length ; i++) {
+                    String string = stringTokenization.get(i).getText();
+                    Token token = new Token(string);
+                    token.setFeatureValue(string, 1);
+                    tokens[i] = token;
+                    strings[i] = string;
+                }
+                TokenSequence tokenSequence = new TokenSequence(tokens);
+                Alphabet alphabet = new Alphabet(strings);
+                FeatureVectorSequence data = new FeatureVectorSequence(alphabet, tokenSequence);
+
+                Sequence output = crf.transduce(data);
+                for (int index = 0; index < data.size(); index++) {
+                    String word = data.get(index).toString();
+                    System.out.print(word.substring(0,word.length()-1) + "/");
+                    System.out.print(output.get(index) + " ");
+                }
+            }
 
         }
         catch (IOException e) {
@@ -81,6 +94,7 @@ public class SequenceTagging implements ProcessingService
         catch (ClassNotFoundException e) {
             System.out.println("Can't load model");
         }
+
 
         return null;
            }
@@ -108,12 +122,18 @@ public class SequenceTagging implements ProcessingService
 
         // Read data from File objects
         pipeList.add(new Input2CharSequence("UTF-8"));
-        pipeList.add(new StringBuffer2String());
-        pipeList.add(new SimpleTaggerSentence2TokenSequence());
+
+        // Regular expression for what constitutes a token.
+        //  This pattern includes Unicode letters, Unicode numbers,
+        //   and the underscore character. Alternatives:
+        //    "\\S+"   (anything not whitespace)
+        //    "\\w+"    ( A-Z, a-z, 0-9, _ )
+        //    "[\\p{L}\\p{N}_]+|[\\p{P}]+"   (a group of only letters and numbers OR
+        //                                    a group of only punctuation marks)
+        Pattern tokenPattern =
+                Pattern.compile("[\\p{L}\\p{N}_]+|[\\p{P}]+");
+        pipeList.add(new CharSequence2TokenSequence(tokenPattern));
         pipeList.add(new TokenSequenceLowercase());
-        pipeList.add(new TokenSequenceRemoveStopwords(false,false));
-        pipeList.add(new TokenSequence2FeatureVectorSequence());
-        pipeList.add(new PrintInput());
 
         return new SerialPipes(pipeList);
     }
