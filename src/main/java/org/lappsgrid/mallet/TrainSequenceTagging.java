@@ -7,10 +7,13 @@ import cc.mallet.optimize.tests.TestOptimizable;
 import cc.mallet.pipe.*;
 import cc.mallet.pipe.iterator.ArrayIterator;
 import cc.mallet.pipe.iterator.FileIterator;
+import cc.mallet.pipe.iterator.LineGroupIterator;
 import cc.mallet.pipe.tsf.OffsetConjunctions;
 import cc.mallet.pipe.tsf.TokenText;
+import cc.mallet.types.Alphabet;
 import cc.mallet.types.Instance;
 import cc.mallet.types.InstanceList;
+import cc.mallet.util.CommandOption;
 import org.lappsgrid.api.ProcessingService;
 import org.lappsgrid.discriminator.Discriminators;
 import org.lappsgrid.metadata.IOSpecification;
@@ -19,6 +22,7 @@ import org.lappsgrid.serialization.Data;
 
 import java.io.*;
 import java.util.ArrayList;
+import java.util.Random;
 import java.util.regex.Pattern;
 
 public class TrainSequenceTagging implements ProcessingService {
@@ -62,132 +66,85 @@ public class TrainSequenceTagging implements ProcessingService {
     }
 
     public String execute(String input) {
-        pipe = buildPipe();
-        InstanceList instances = readDirectory(new File(input));
-        System.out.println("Vector data");
-        for (Instance instance : instances) {
-            System.out.println(instance.getData());
-        }
-        try {
-            trainSequenceTagging(instances, input);
-        } catch (IOException e) {
-            System.out.println("Model file cannot be written.");
-        }
+        train(input);
         return null;
     }
 
+    CRF crf;
     Pipe pipe;
-    public Pipe buildPipe() {
-        ArrayList pipeList = new ArrayList();
-
-        // Read data from File objects
-        pipeList.add(new Input2CharSequence("UTF-8"));
-
-        // Regular expression for what constitutes a token.
-        //  This pattern includes Unicode letters, Unicode numbers,
-        //   and the underscore character. Alternatives:
-        //    "\\S+"   (anything not whitespace)
-        //    "\\w+"    ( A-Z, a-z, 0-9, _ )
-        //    "[\\p{L}\\p{N}_]+|[\\p{P}]+"   (a group of only letters and numbers OR
-        //                                    a group of only punctuation marks)
-        Pattern tokenPattern =
-                Pattern.compile("[\\p{L}\\p{N}_]+");
-
-        pipeList.add(new StringBuffer2String());
-        pipeList.add(new SimpleTaggerSentence2TokenSequence(true));
-        pipeList.add(new TokenSequenceLowercase());
-        pipeList.add(new TokenSequence2FeatureVectorSequence());
-        pipeList.add(new PrintInputAndTarget());
-
-        return new SerialPipes(pipeList);
-    }
-
-    public InstanceList readDirectory(File directory) {
-        return readDirectories(new File[]{directory});
-    }
-
-    public InstanceList readDirectories(File[] directories) {
-
-        // Construct a file iterator, starting with the
-        //  specified directories, and recursing through subdirectories.
-        // The second argument specifies a FileFilter to use to select
-        //  files within a directory.
-        // The third argument is a Pattern that is applied to the
-        //   filename to produce a class label. In this case, I've
-        //   asked it to use the last directory name in the path.
-        FileIterator iterator =
-                new FileIterator(directories,
-                        new TxtFilter(),
-                        FileIterator.LAST_DIRECTORY);
-
-        // Construct a new instance list, passing it the pipe
-        //  we want to use to process instances.
-        InstanceList instances = new InstanceList(pipe);
-
-        // Now process each instance provided by the iterator.
-        instances.addThruPipe(iterator);
-
-        return instances;
-    }
-
-    class TxtFilter implements FileFilter {
-
-        /**
-         * Test whether the string representation of the file
-         * ends with the correct extension. Note that {@ref FileIterator}
-         * will only call this filter if the file is not a directory,
-         * so we do not need to test that it is a file.
-         */
-        public boolean accept(File file) {
-            return file.toString().endsWith(".txt");
-        }
-    }
-
-    public void trainSequenceTagging(InstanceList trainingData, String input)
-            throws IOException {
-        // setup:
-        //    CRF (model) and the state machine
-        //    CRFOptimizableBy* objects (terms in the objective function)
-        //    CRF trainer
-        //    evaluator and writer
-
-        // model
-        CRF crf = new CRF(trainingData.getDataAlphabet(),
-                trainingData.getTargetAlphabet());
-        // construct the finite state machine
-        crf.addFullyConnectedStatesForLabels();
-        // initialize model's weights
-        crf.setWeightsDimensionAsIn(trainingData);
-
-        //  CRFOptimizableBy* objects (terms in the objective function)
-        // objective 1: label likelihood objective
-        CRFOptimizableByLabelLikelihood optLabel =
-                new CRFOptimizableByLabelLikelihood(crf, trainingData);
-
-        // CRF trainer
-        Optimizable.ByGradientValue[] opts =
-                new Optimizable.ByGradientValue[]{optLabel};
-        // by default, use L-BFGS as the optimizer
-        CRFTrainerByValueGradients crfTrainer =
-                new CRFTrainerByValueGradients(crf, opts);
-
-        CRFWriter crfWriter = new CRFWriter(input + ".model") {
-            @Override
-            public boolean precondition(TransducerTrainer tt) {
-                // save the trained model after training finishes
-                return tt.getIteration() % Integer.MAX_VALUE == 0;
+    TransducerEvaluator eval = null;
+    InstanceList testData = null;
+    ArrayList<String> trainingFiles = new ArrayList<String>();
+    public String train(String input){
+        try{
+            String fileName = input + ".model";
+            File file = new File(fileName);
+            if (file.createNewFile()){
+                pipe = new SimpleTagger.SimpleTaggerSentence2FeatureVectorSequence();
+                pipe.getTargetAlphabet().lookupIndex("O");
             }
-        };
-        crfTrainer.addEvaluator(crfWriter);
+            else {
+                System.out.println("Model file already exists");
+                return null;
+            }
 
-        // all setup done, train until convergence
-        crfTrainer.setMaxResets(0);
-        crfTrainer.train(trainingData, Integer.MAX_VALUE);
+            pipe.setTargetProcessing(true);
+            listFilesForFolder(new File(input));
+            for (String filePath : trainingFiles) {
+                InstanceList trainingData = new InstanceList(pipe);
+                Reader inputFile = new FileReader(new File(filePath));
+                trainingData.addThruPipe(new LineGroupIterator(inputFile,
+                        Pattern.compile("^\\s*$"), true));
+                System.out.println("Training: " + filePath);
+                System.out.println("Number of features in training data: " + pipe.getDataAlphabet().size());
+                System.out.println("Number of predicates: " + pipe.getDataAlphabet().size());
+
+                if (pipe.isTargetProcessing()) {
+                    Alphabet targets = pipe.getTargetAlphabet();
+                    StringBuffer buf = new StringBuffer("Labels:");
+                    for (int i = 0; i < targets.size(); i++)
+                        buf.append(" ").append(targets.lookupObject(i).toString());
+                    System.out.println(buf.toString());
+                }
+
+                int[] orders = {1};
+                double var = 10.0;
+                crf = SimpleTagger.train(trainingData, testData, eval, orders,
+                        "O", "\\s", ".*",
+                        true, 500, var, crf);
+            }
+            ObjectOutputStream s =
+                    new ObjectOutputStream(new FileOutputStream(file));
+            s.writeObject(crf);
+            s.close();
 
 
-        // save the trained model (if CRFWriter is not used)
-        FileOutputStream fos = new FileOutputStream(input + ".model");
-        ObjectOutputStream oos = new ObjectOutputStream(fos);
-        oos.writeObject(crf);
+        }catch (IOException e) {
+            System.out.println("Failed to create file");
+            e.printStackTrace();
+            return null;
+        }/*catch (ClassNotFoundException e) {
+            System.out.println("ClassNotFoundException");
+            return null;
+        }*/
+
+        //if (trainingFile != null) { try{trainingFile.close();}catch(IOException e){} }
+        return null;
+    }
+
+    public void listFilesForFolder(final File folder) {
+        for (final File fileEntry : folder.listFiles()) {
+            if (fileEntry.isDirectory()) {
+                listFilesForFolder(fileEntry);
+            } else {
+                String filePath = fileEntry.getPath();
+                String extension = filePath.substring(
+                        filePath.lastIndexOf(".") + 1, filePath.length());
+                if (extension.equals("txt")){
+                    trainingFiles.add(filePath);
+                }
+            }
+
+        }
     }
 }
