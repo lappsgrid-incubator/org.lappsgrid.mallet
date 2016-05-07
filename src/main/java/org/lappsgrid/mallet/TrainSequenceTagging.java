@@ -65,17 +65,13 @@ public class TrainSequenceTagging implements ProcessingService {
         return generateMetadata();
     }
 
-    public String execute(String input) {
-        train(input);
-        return null;
-    }
 
     CRF crf;
     Pipe pipe;
     TransducerEvaluator eval = null;
     InstanceList testData = null;
     ArrayList<String> trainingFiles = new ArrayList<String>();
-    public String train(String input){
+    public String execute(String input) {
         try{
             String fileName = input + ".model";
             File file = new File(fileName);

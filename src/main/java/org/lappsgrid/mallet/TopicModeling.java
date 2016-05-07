@@ -1,11 +1,22 @@
 package org.lappsgrid.mallet;
 
 
+
+import cc.mallet.pipe.*;
+import cc.mallet.pipe.iterator.FileIterator;
+import cc.mallet.topics.ParallelTopicModel;
+import cc.mallet.topics.TopicInferencer;
+import cc.mallet.topics.tui.TopicTrainer;
+import cc.mallet.types.*;
 import org.lappsgrid.api.ProcessingService;
 import org.lappsgrid.discriminator.Discriminators;
 import org.lappsgrid.metadata.IOSpecification;
 import org.lappsgrid.metadata.ServiceMetadata;
 import org.lappsgrid.serialization.Data;
+
+import java.io.*;
+import java.util.*;
+import java.util.regex.Pattern;
 
 public class TopicModeling implements ProcessingService
 {
@@ -47,6 +58,18 @@ public class TopicModeling implements ProcessingService
     }
 
     public String execute(String input) {
+        //String[] args = {};
+        //TopicTrainer.main(args);
+        try {
+            TopicInferencer topicInferencer = TopicInferencer.read(new File("masc_500k_texts.inferencer"));
+            InstanceList instances = InstanceList.load(new File(input + ".mallet"));
+            topicInferencer.writeInferredDistributions(instances, new File(input + "Results.txt"),
+                    100, 10, 10, 0.0, -1);
+            System.out.println("Results written");
+        } catch (Exception e) {
+            System.err.println(e.getMessage());
+            return null;
+        }
         return null;
     }
 }
