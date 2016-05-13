@@ -4,6 +4,8 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.lappsgrid.api.WebService;
+import org.lappsgrid.discriminator.Discriminators;
+import org.lappsgrid.serialization.Data;
 
 import java.io.IOException;
 
@@ -30,6 +32,27 @@ public class TestSequenceTagging {
 
     @Test
     public void testExecute() {
-        String string = this.service.execute("src/test/resources/testTagging");
+        final String text = "The\n" +
+                "greatest\n" +
+                "weapon\n" +
+                "against\n" +
+                "stress\n" +
+                "is\n" +
+                "our\n" +
+                "ability\n" +
+                "to\n" +
+                "choose\n" +
+                "one\n" +
+                "thought\n" +
+                "over\n" +
+                "another\n" +
+                ".";
+        // wrap plain text into `Data`
+        Data input = new Data<>(Discriminators.Uri.TEXT, text);
+
+        // call `execute()` with jsonized input,
+        String string = this.service.execute(input.asJson());
+
+        System.out.println(string);
     }
 }

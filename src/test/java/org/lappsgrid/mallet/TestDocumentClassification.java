@@ -52,5 +52,7 @@ public class TestDocumentClassification {
 
         // call `execute()` with jsonized input,
         String string = this.service.execute(input.asJson());
+
+        System.out.println(string);
     }
 }

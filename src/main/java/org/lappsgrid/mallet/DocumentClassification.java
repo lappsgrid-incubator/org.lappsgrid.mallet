@@ -154,6 +154,6 @@ public class DocumentClassification implements ProcessingService
         data = new DataContainer(container);
 
         // Step #8: Serialize the data object and return the JSON.
-        return data.asJson();
+        return data.asPrettyJson();
     }
 }
