@@ -30,6 +30,6 @@ public class TestSequenceTagging {
 
     @Test
     public void testExecute() {
-        String string = this.service.execute("testTagging");
+        String string = this.service.execute("src/test/resources/testTagging");
     }
 }

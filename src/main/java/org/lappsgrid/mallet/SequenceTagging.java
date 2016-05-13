@@ -72,7 +72,7 @@ public class SequenceTagging implements ProcessingService
             testFile = new FileReader(new File(input + ".txt"));
             Pipe p;
             ObjectInputStream s =
-                    new ObjectInputStream(new FileInputStream("dataCOPY.model"));
+                    new ObjectInputStream(new FileInputStream("src/main/resources/masc_500k_texts.model"));
             CRF crf = (CRF) s.readObject();
             s.close();
             p = crf.getInputPipe();

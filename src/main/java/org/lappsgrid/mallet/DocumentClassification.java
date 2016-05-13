@@ -103,7 +103,7 @@ public class DocumentClassification implements ProcessingService
         }
 
         // convert strings of file names in File objects
-        File classifierFile = new File("masc_500k_texts.classifier");
+        File classifierFile = new File("src/main/resources/masc_500k_texts.classifier");
         Classifier classifier;
         try
         {
@@ -130,6 +130,8 @@ public class DocumentClassification implements ProcessingService
                             labeling.getLabelAtRank(rank).toString(),
                             Uri.TEXT);
                     a.addFeature(Features.Token.TYPE, Double.toString(labeling.getValueAtRank(rank)));
+
+                    System.out.println(labeling.getLabelAtRank(rank) + ":" + labeling.getValueAtRank(rank));
                 }
             }
         }

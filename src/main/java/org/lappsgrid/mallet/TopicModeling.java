@@ -61,7 +61,7 @@ public class TopicModeling implements ProcessingService
         //String[] args = {};
         //TopicTrainer.main(args);
         try {
-            TopicInferencer topicInferencer = TopicInferencer.read(new File("masc_500k_texts.inferencer"));
+            TopicInferencer topicInferencer = TopicInferencer.read(new File("src/main/resources/masc_500k_texts.inferencer"));
             InstanceList instances = InstanceList.load(new File(input + ".mallet"));
             topicInferencer.writeInferredDistributions(instances, new File(input + "Results.txt"),
                     100, 10, 10, 0.0, -1);

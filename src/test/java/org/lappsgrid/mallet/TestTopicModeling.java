@@ -31,6 +31,6 @@ public class TestTopicModeling {
 
     @Test
     public void testExecute() {
-        String string = this.service.execute("test");
+        String string = this.service.execute("src/test/resources/test");
     }
 }
