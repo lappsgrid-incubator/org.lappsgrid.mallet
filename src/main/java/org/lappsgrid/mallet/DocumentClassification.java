@@ -4,6 +4,7 @@ package org.lappsgrid.mallet;
 
 import cc.mallet.classify.Classifier;
 import cc.mallet.pipe.iterator.CsvIterator;
+import cc.mallet.types.Label;
 import cc.mallet.types.Labeling;
 import org.lappsgrid.api.ProcessingService;
 import org.lappsgrid.discriminator.Discriminators.Uri;
@@ -18,6 +19,7 @@ import org.lappsgrid.serialization.lif.View;
 import org.lappsgrid.vocabulary.Features;
 
 import java.io.*;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 
@@ -92,15 +94,6 @@ public class DocumentClassification implements ProcessingService
 
         // Get input text and write a temporary file
         String text = container.getText();
-        File temp = new File("temp");
-        try {
-            ObjectOutputStream oos =
-                    new ObjectOutputStream(new FileOutputStream(temp));
-            oos.writeObject(text);
-            oos.close();
-        } catch (IOException e) {
-            return new Data<String>("Error writing temporary file").asJson();
-        }
 
         // convert strings of file names in File objects
         File classifierFile = new File("src/main/resources/masc_500k_texts.classifier");
@@ -114,31 +107,40 @@ public class DocumentClassification implements ProcessingService
             ois.close();
 
             CsvIterator reader =
-                    new CsvIterator(new FileReader(temp),
+                    new CsvIterator(new StringReader(text),
                             "(\\w+)\\s+(\\w+)\\s+(.*)",
                             3, 2, 1);
+//                    new CsvIterator(new FileReader(temp),
+//                            "(\\w+)\\s+(\\w+)\\s+(.*)",
+//                            3, 2, 1);
 
             Iterator instances =
                     classifier.getInstancePipe().newIteratorFrom(reader);
 
+            Map<String,Double> rankings = new HashMap<>();
             while (instances.hasNext()) {
                 Labeling labeling = classifier.classify(instances.next()).getLabeling();
 
                 // print the labels with their weights in descending order (ie best first)
                 for (int rank = 0; rank < labeling.numLocations(); rank++) {
-                    Annotation a = view.newAnnotation(
-                            labeling.getLabelAtRank(rank).toString(),
-                            Uri.TEXT);
-                    a.addFeature(Features.Token.TYPE, Double.toString(labeling.getValueAtRank(rank)));
+//                    Annotation a = view.newAnnotation(
+//                            labeling.getLabelAtRank(rank).toString(),
+//                            Uri.TEXT);
+//                    a.addFeature(Features.Token.TYPE, Double.toString(labeling.getValueAtRank(rank)));
+//
+//                    System.out.println(labeling.getLabelAtRank(rank) + ":" + labeling.getValueAtRank(rank));
+                    Label label;
 
-                    System.out.println(labeling.getLabelAtRank(rank) + ":" + labeling.getValueAtRank(rank));
+                    rankings.put(labeling.getLabelAtRank(rank).toString(), labeling.getValueAtRank(rank));
                 }
             }
+            data = new Data<Map>(Uri.JSON, rankings);
         }
         catch (IOException e)
         {
+            e.printStackTrace();
             System.out.println("File not found.");
-            System.out.println(temp.getAbsolutePath());
+//            System.out.println(temp.getAbsolutePath());
         }
         catch (ClassNotFoundException e)
         {
@@ -151,7 +153,7 @@ public class DocumentClassification implements ProcessingService
         view.addContains(Uri.TOKEN, this.getClass().getName(), "labels");
 
         // Step #7: Create a DataContainer with the result.
-        data = new DataContainer(container);
+//        data = new DataContainer(container);
 
         // Step #8: Serialize the data object and return the JSON.
         return data.asPrettyJson();

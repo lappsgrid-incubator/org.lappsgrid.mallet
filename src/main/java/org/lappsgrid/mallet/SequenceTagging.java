@@ -106,29 +106,33 @@ public class SequenceTagging implements ProcessingService
 
         // Get input text and write a temporary file
         String text = container.getText();
-        File temp = new File("temp");
-        try {
-            ObjectOutputStream oos =
-                    new ObjectOutputStream(new FileOutputStream(temp));
-            oos.writeObject(text);
-            oos.close();
-
-            testFile = new FileReader(temp);
-        } catch (IOException e) {
-            return new Data<String>("Error writing temporary file").asJson();
-        }
+//        File temp = new File("temp");
+//        try {
+//            ObjectOutputStream oos =
+//                    new ObjectOutputStream(new FileOutputStream(temp));
+//            oos.writeObject(text);
+//            oos.close();
+//
+//            testFile = new FileReader(temp);
+//        } catch (IOException e) {
+//            return new Data<String>("Error writing temporary file").asJson();
+//        }
 
 
         try {
             Pipe p;
-            ObjectInputStream s =
-                    new ObjectInputStream(new FileInputStream("src/main/resources/masc_500k_texts.model"));
+            InputStream inputStream = this.getClass().getResourceAsStream("/masc_500k_texts.model");
+//            ObjectInputStream s =
+//                    new ObjectInputStream(new FileInputStream("src/main/resources/masc_500k_texts.model"));
+            ObjectInputStream s = new ObjectInputStream(inputStream);
+
             CRF crf = (CRF) s.readObject();
             s.close();
             p = crf.getInputPipe();
             p.setTargetProcessing(false);
             testData = new InstanceList(p);
-            testData.addThruPipe(new LineGroupIterator(testFile,
+
+            testData.addThruPipe(new LineGroupIterator(new StringReader(text),
                     Pattern.compile("^\\s*$"), true));
             System.out.println("Number of predicates: "+p.getDataAlphabet().size());
             for (int i = 0; i < testData.size(); i++) {
@@ -146,7 +150,7 @@ public class SequenceTagging implements ProcessingService
                     for (int j = 0; j < inputs.size(); j++) {
 
                         // getting the POS for each word
-                        StringBuffer buf = new StringBuffer();
+                        StringBuilder buf = new StringBuilder();
                         for (int a = 0; a < k; a++) {
                             buf.append(outputs[a].get(j).toString()).append(" ");
                         }
@@ -155,7 +159,7 @@ public class SequenceTagging implements ProcessingService
                         word = word.substring(0,word.length()-1);
                         start = text.indexOf(word, start);
                         int end = start + word.length();
-                        Annotation a = view.newAnnotation(word, Discriminators.Uri.TOKEN, start, end);
+                        Annotation a = view.newAnnotation("token" + i, Discriminators.Uri.TOKEN, start, end);
                         a.addFeature(Features.Token.POS, buf.toString());
 
                         System.out.println(word + " "  + buf.toString());
@@ -165,9 +169,11 @@ public class SequenceTagging implements ProcessingService
             }
         }
         catch (IOException e) {
+            e.printStackTrace();
             System.out.println("Can't read file");
         }
         catch (ClassNotFoundException e) {
+            e.printStackTrace();
             System.out.println("ClassNotFoundException");
         }
 
