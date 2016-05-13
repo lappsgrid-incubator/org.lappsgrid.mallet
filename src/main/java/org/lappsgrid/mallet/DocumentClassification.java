@@ -10,9 +10,16 @@ import org.lappsgrid.discriminator.Discriminators.Uri;
 import org.lappsgrid.metadata.IOSpecification;
 import org.lappsgrid.metadata.ServiceMetadata;
 import org.lappsgrid.serialization.Data;
+import org.lappsgrid.serialization.DataContainer;
+import org.lappsgrid.serialization.Serializer;
+import org.lappsgrid.serialization.lif.Annotation;
+import org.lappsgrid.serialization.lif.Container;
+import org.lappsgrid.serialization.lif.View;
+import org.lappsgrid.vocabulary.Features;
 
 import java.io.*;
 import java.util.Iterator;
+import java.util.Map;
 
 
 public class DocumentClassification implements ProcessingService
@@ -55,80 +62,96 @@ public class DocumentClassification implements ProcessingService
     }
 
     public String execute(String input) {
+        // Step #1: Parse the input.
+        Data data = Serializer.parse(input, Data.class);
+
+        // Step #2: Check the discriminator
+        final String discriminator = data.getDiscriminator();
+        if (discriminator.equals(Uri.ERROR)) {
+            // Return the input unchanged.
+            return input;
+        }
+
+        // Step #3: Extract the text.
+        Container container = null;
+        if (discriminator.equals(Uri.TEXT)) {
+            container = new Container();
+            container.setText(data.getPayload().toString());
+        }
+        else if (discriminator.equals(Uri.LAPPS)) {
+            container = new Container((Map) data.getPayload());
+        }
+        else {
+            // This is a format we don't accept.
+            String message = String.format("Unsupported discriminator type: %s", discriminator);
+            return new Data<String>(Uri.ERROR, message).asJson();
+        }
+
+        // Step #4: Create a new View
+        View view = container.newView();
+
+        // Get input text and write a temporary file
+        String text = container.getText();
+        File temp = new File("temp");
+        try {
+            ObjectOutputStream oos =
+                    new ObjectOutputStream(new FileOutputStream(temp));
+            oos.writeObject(text);
+            oos.close();
+        } catch (IOException e) {
+            return new Data<String>("Error writing temporary file").asJson();
+        }
+
         // convert strings of file names in File objects
         File classifierFile = new File("masc_500k_texts.classifier");
-        File inputFile = new File(input);
+        Classifier classifier;
         try
         {
             // load the classifier and guess the labeling of the input file
-            Classifier classifier = loadClassifier(classifierFile);
-            printLabelings(classifier, inputFile);
+            ObjectInputStream ois =
+                    new ObjectInputStream(new FileInputStream(classifierFile));
+            classifier = (Classifier) ois.readObject();
+            ois.close();
+
+            CsvIterator reader =
+                    new CsvIterator(new FileReader(temp),
+                            "(\\w+)\\s+(\\w+)\\s+(.*)",
+                            3, 2, 1);
+
+            Iterator instances =
+                    classifier.getInstancePipe().newIteratorFrom(reader);
+
+            while (instances.hasNext()) {
+                Labeling labeling = classifier.classify(instances.next()).getLabeling();
+
+                // print the labels with their weights in descending order (ie best first)
+                for (int rank = 0; rank < labeling.numLocations(); rank++) {
+                    Annotation a = view.newAnnotation(
+                            labeling.getLabelAtRank(rank).toString(),
+                            Uri.TEXT);
+                    a.addFeature(Features.Token.TYPE, Double.toString(labeling.getValueAtRank(rank)));
+                }
+            }
         }
         catch (IOException e)
         {
             System.out.println("File not found.");
-            System.out.println(inputFile.getAbsolutePath());
+            System.out.println(temp.getAbsolutePath());
         }
         catch (ClassNotFoundException e)
         {
             System.out.println("ClassNotFoundException");
         }
-        return null;
-    }
 
-    public Classifier loadClassifier(File serializedFile)
-            throws IOException, ClassNotFoundException {
+        // Step #6: Update the view's metadata. Each view contains metadata about the
+        // annotations it contains, in particular the name of the tool that produced the
+        // annotations.
+        view.addContains(Uri.TOKEN, this.getClass().getName(), "labels");
 
-        // The standard way to save classifiers and Mallet data
-        //  for repeated use is through Java serialization.
-        // Here we load a serialized classifier from a file.
+        // Step #7: Create a DataContainer with the result.
+        data = new DataContainer(container);
 
-        Classifier classifier;
-
-        ObjectInputStream ois =
-                new ObjectInputStream(new FileInputStream(serializedFile));
-        classifier = (Classifier) ois.readObject();
-        ois.close();
-
-        return classifier;
-    }
-
-    public void printLabelings(Classifier classifier, File file) throws IOException {
-
-        // Create a new iterator that will read raw instance data from
-        //  the lines of a file.
-        // Lines should be formatted as:
-        //
-        //   [name] [label] [data ... ]
-        //
-        //  in this case, "label" is ignored.
-
-        CsvIterator reader =
-                new CsvIterator(new FileReader(file),
-                        "(\\w+)\\s+(\\w+)\\s+(.*)",
-                        3, 2, 1);  // (data, label, name) field indices
-
-        // Create an iterator that will pass each instance through
-        //  the same pipe that was used to create the training data
-        //  for the classifier.
-        Iterator instances =
-                classifier.getInstancePipe().newIteratorFrom(reader);
-
-        // Classifier.classify() returns a Classification object
-        //  that includes the instance, the classifier, and the
-        //  classification results (the labeling). Here we only
-        //  care about the Labeling.
-        while (instances.hasNext()) {
-            Labeling labeling = classifier.classify(instances.next()).getLabeling();
-
-            // print the labels with their weights in descending order (ie best first)
-
-            for (int rank = 0; rank < labeling.numLocations(); rank++){
-                System.out.println(labeling.getLabelAtRank(rank) + ":" +
-                        labeling.getValueAtRank(rank) + " ");
-            }
-            System.out.println();
-
-        }
+        // Step #8: Serialize the data object and return the JSON.
+        return data.asJson();
     }
 }

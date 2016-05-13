@@ -110,9 +110,6 @@ public class TrainClassifier implements ProcessingService {
         //  mapping feature IDs to counts.
         pipeList.add(new FeatureSequence2FeatureVector());
 
-        // Print out the features and the label
-        pipeList.add(new PrintInputAndTarget());
-
         return new SerialPipes(pipeList);
     }
 
