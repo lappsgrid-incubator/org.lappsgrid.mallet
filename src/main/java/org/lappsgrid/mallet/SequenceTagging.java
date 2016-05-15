@@ -1,16 +1,8 @@
 package org.lappsgrid.mallet;
 
-import cc.mallet.extract.StringTokenization;
 import cc.mallet.fst.*;
-import cc.mallet.fst.tests.TestCRF;
-import cc.mallet.optimize.Optimizable;
-import cc.mallet.optimize.tests.TestOptimizable;
 import cc.mallet.pipe.*;
-import cc.mallet.pipe.iterator.ArrayIterator;
-import cc.mallet.pipe.iterator.FileIterator;
 import cc.mallet.pipe.iterator.LineGroupIterator;
-import cc.mallet.pipe.tsf.OffsetConjunctions;
-import cc.mallet.pipe.tsf.TokenText;
 import cc.mallet.types.*;
 import org.lappsgrid.api.ProcessingService;
 import org.lappsgrid.discriminator.Discriminators;
@@ -25,17 +17,15 @@ import org.lappsgrid.serialization.lif.View;
 import org.lappsgrid.vocabulary.Features;
 
 import java.io.*;
-import java.util.ArrayList;
 import java.util.Map;
-import java.util.Random;
 import java.util.regex.Pattern;
 
 import static cc.mallet.fst.SimpleTagger.apply;
 
 
-public class SequenceTagging implements ProcessingService
-{
-    public SequenceTagging() { }
+public class SequenceTagging implements ProcessingService {
+    public SequenceTagging() {
+    }
 
     private String generateMetadata() {
         // Create and populate the metadata object
@@ -73,8 +63,7 @@ public class SequenceTagging implements ProcessingService
     }
 
     public String execute(String input) {
-        Reader testFile;
-        InstanceList testData;
+        InstanceList instanceList;
 
         // Step #1: Parse the input.
         Data data = Serializer.parse(input, Data.class);
@@ -87,18 +76,16 @@ public class SequenceTagging implements ProcessingService
         }
 
         // Step #3: Extract the text.
-        Container container = null;
+        Container container;
         if (discriminator.equals(Discriminators.Uri.TEXT)) {
             container = new Container();
             container.setText(data.getPayload().toString());
-        }
-        else if (discriminator.equals(Discriminators.Uri.LAPPS)) {
+        } else if (discriminator.equals(Discriminators.Uri.LAPPS)) {
             container = new Container((Map) data.getPayload());
-        }
-        else {
+        } else {
             // This is a format we don't accept.
             String message = String.format("Unsupported discriminator type: %s", discriminator);
-            return new Data<String>(Discriminators.Uri.ERROR, message).asJson();
+            return new Data<>(Discriminators.Uri.ERROR, message).asJson();
         }
 
         // Step #4: Create a new View
@@ -106,17 +93,6 @@ public class SequenceTagging implements ProcessingService
 
         // Get input text and write a temporary file
         String text = container.getText();
-//        File temp = new File("temp");
-//        try {
-//            ObjectOutputStream oos =
-//                    new ObjectOutputStream(new FileOutputStream(temp));
-//            oos.writeObject(text);
-//            oos.close();
-//
-//            testFile = new FileReader(temp);
-//        } catch (IOException e) {
-//            return new Data<String>("Error writing temporary file").asJson();
-//        }
 
 
         try {
@@ -130,13 +106,13 @@ public class SequenceTagging implements ProcessingService
             s.close();
             p = crf.getInputPipe();
             p.setTargetProcessing(false);
-            testData = new InstanceList(p);
+            instanceList = new InstanceList(p);
 
-            testData.addThruPipe(new LineGroupIterator(new StringReader(text),
+            instanceList.addThruPipe(new LineGroupIterator(new StringReader(text),
                     Pattern.compile("^\\s*$"), true));
-            System.out.println("Number of predicates: "+p.getDataAlphabet().size());
-            for (int i = 0; i < testData.size(); i++) {
-                Sequence inputs = (Sequence)testData.get(i).getData();
+            System.out.println("Number of predicates: " + p.getDataAlphabet().size());
+            for (int i = 0; i < instanceList.size(); i++) {
+                Sequence inputs = (Sequence) instanceList.get(i).getData();
                 Sequence[] outputs = apply(crf, inputs, 1);
                 int k = outputs.length;
                 boolean error = false;
@@ -145,7 +121,7 @@ public class SequenceTagging implements ProcessingService
                         error = true;
                     }
                 }
-                if (! error) {
+                if (!error) {
                     int start = 0;
                     for (int j = 0; j < inputs.size(); j++) {
 
@@ -156,23 +132,21 @@ public class SequenceTagging implements ProcessingService
                         }
 
                         String word = inputs.get(j).toString();
-                        word = word.substring(0,word.length()-1);
+                        word = word.substring(0, word.length() - 1);
                         start = text.indexOf(word, start);
                         int end = start + word.length();
-                        Annotation a = view.newAnnotation("token" + i, Discriminators.Uri.TOKEN, start, end);
+                        Annotation a = view.newAnnotation("tok" + j, Discriminators.Uri.TOKEN, start, end);
                         a.addFeature(Features.Token.POS, buf.toString());
 
-                        System.out.println(word + " "  + buf.toString());
+                        System.out.println(word + " " + buf.toString());
                     }
                     System.out.println();
                 }
             }
-        }
-        catch (IOException e) {
+        } catch (IOException e) {
             e.printStackTrace();
             System.out.println("Can't read file");
-        }
-        catch (ClassNotFoundException e) {
+        } catch (ClassNotFoundException e) {
             e.printStackTrace();
             System.out.println("ClassNotFoundException");
         }

@@ -4,8 +4,11 @@ package org.lappsgrid.mallet;
 
 import cc.mallet.classify.Classifier;
 import cc.mallet.pipe.iterator.CsvIterator;
+import cc.mallet.pipe.iterator.StringArrayIterator;
+import cc.mallet.types.Instance;
 import cc.mallet.types.Label;
 import cc.mallet.types.Labeling;
+import jdk.internal.util.xml.impl.Input;
 import org.lappsgrid.api.ProcessingService;
 import org.lappsgrid.discriminator.Discriminators.Uri;
 import org.lappsgrid.metadata.IOSpecification;
@@ -96,41 +99,29 @@ public class DocumentClassification implements ProcessingService
         String text = container.getText();
 
         // convert strings of file names in File objects
-        File classifierFile = new File("src/main/resources/masc_500k_texts.classifier");
+        InputStream inputStream =
+                this.getClass().getResourceAsStream("/masc_500k_texts.classifier");
+
         Classifier classifier;
         try
         {
             // load the classifier and guess the labeling of the input file
-            ObjectInputStream ois =
-                    new ObjectInputStream(new FileInputStream(classifierFile));
-            classifier = (Classifier) ois.readObject();
-            ois.close();
+            ObjectInputStream s = new ObjectInputStream(inputStream);
+            classifier = (Classifier) s.readObject();
+            s.close();
 
-            CsvIterator reader =
-                    new CsvIterator(new StringReader(text),
-                            "(\\w+)\\s+(\\w+)\\s+(.*)",
-                            3, 2, 1);
-//                    new CsvIterator(new FileReader(temp),
-//                            "(\\w+)\\s+(\\w+)\\s+(.*)",
-//                            3, 2, 1);
-
+            String[] stringArray = {text};
+            StringArrayIterator sai = new StringArrayIterator(stringArray);
             Iterator instances =
-                    classifier.getInstancePipe().newIteratorFrom(reader);
+                    classifier.getInstancePipe().newIteratorFrom(sai);
 
             Map<String,Double> rankings = new HashMap<>();
+
             while (instances.hasNext()) {
                 Labeling labeling = classifier.classify(instances.next()).getLabeling();
 
                 // print the labels with their weights in descending order (ie best first)
                 for (int rank = 0; rank < labeling.numLocations(); rank++) {
-//                    Annotation a = view.newAnnotation(
-//                            labeling.getLabelAtRank(rank).toString(),
-//                            Uri.TEXT);
-//                    a.addFeature(Features.Token.TYPE, Double.toString(labeling.getValueAtRank(rank)));
-//
-//                    System.out.println(labeling.getLabelAtRank(rank) + ":" + labeling.getValueAtRank(rank));
-                    Label label;
-
                     rankings.put(labeling.getLabelAtRank(rank).toString(), labeling.getValueAtRank(rank));
                 }
             }
@@ -140,11 +131,10 @@ public class DocumentClassification implements ProcessingService
         {
             e.printStackTrace();
             System.out.println("File not found.");
-//            System.out.println(temp.getAbsolutePath());
         }
         catch (ClassNotFoundException e)
         {
-            System.out.println("ClassNotFoundException");
+            e.printStackTrace();
         }
 
         // Step #6: Update the view's metadata. Each view contains metadata about the

@@ -6,20 +6,12 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import static org.junit.Assert.*;
-
 // more APIs for testing code
 import org.lappsgrid.api.WebService;
 import org.lappsgrid.discriminator.Discriminators;
 import org.lappsgrid.serialization.Data;
-import org.lappsgrid.serialization.DataContainer;
-import org.lappsgrid.serialization.Serializer;
-import org.lappsgrid.serialization.lif.Annotation;
-import org.lappsgrid.serialization.lif.Container;
-import org.lappsgrid.serialization.lif.View;
 
 import java.io.IOException;
-import java.util.List;
 
 
 public class TestDocumentClassification {
@@ -45,7 +37,10 @@ public class TestDocumentClassification {
 
     @Test
     public void testExecute() {
-        final String text = "testString Why did the chicken cross the road? To get to the other side!";
+        final String text =
+                "Why did the chicken cross the road? To get to the other side!\n" +
+                "Ordinarily, staring is creepy. But if you spread your attention across many individuals, then it's just people watching.\n" +
+                        "We can teach kids there’s no i in team, but it’s way more important  to teach them that there’s no a in  definitely.";
 
         // wrap plain text into `Data`
         Data input = new Data<>(Discriminators.Uri.TEXT, text);
