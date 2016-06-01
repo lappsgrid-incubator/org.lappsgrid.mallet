@@ -17,7 +17,7 @@ import org.lappsgrid.serialization.lif.View;
 import org.lappsgrid.vocabulary.Features;
 
 import java.io.*;
-import java.util.Map;
+import java.util.*;
 import java.util.regex.Pattern;
 
 import static cc.mallet.fst.SimpleTagger.apply;
@@ -91,26 +91,101 @@ public class SequenceTagging implements ProcessingService {
         // Step #4: Create a new View
         View view = container.newView();
 
-        // Get input text and write a temporary file
+        // Get the text from the container
         String text = container.getText();
+
+        // ArrayLists for holding information about tokens
+        ArrayList<String> words = new ArrayList<>();
+        ArrayList<Integer> starts = new ArrayList<>();
+        ArrayList<Integer> ends = new ArrayList<>();
+
+        // initialization of variables needed for tokenization
+        int charCount = 0, start = 0, end = 0;
+        StringBuilder token = new StringBuilder();
+        char[] punctuation = ":;.!?\'\"(){}[]".toCharArray();
+
+        // iterate through the text to tokenize
+        for (char ch : text.toCharArray()) {
+            if (Character.isLetter(ch)) { // process letters
+                token.append(ch);
+            } else if (Character.isSpaceChar(ch)) { // process space chars
+                if (token.length() > 0) {
+                    end = charCount - 1;
+                    words.add(token.toString());
+                    starts.add(start);
+                    ends.add(end);
+                    token = new StringBuilder();
+                }
+                start = charCount + 1;
+            } else if (ch == '\'' && token.length() > 0) { // process contractions
+                end = charCount - 1;
+                words.add(token.toString());
+                starts.add(start);
+                ends.add(end);
+
+                token = new StringBuilder();
+                token.append('\'');
+                start = charCount;
+            } else if (Arrays.binarySearch(punctuation, ch) != -1) { // process punctuation
+                if (token.length() > 0) {
+                    end = charCount - 1;
+                    words.add(token.toString());
+                    starts.add(start);
+                    ends.add(end);
+                }
+
+                start = charCount;
+                words.add(Character.toString(ch));
+                starts.add(start);
+                ends.add(start);
+
+                token = new StringBuilder();
+                start = charCount + 1;
+            }
+            charCount++;
+        }
+        if (token.length() > 0) {
+            end = charCount - 1;
+            words.add(token.toString());
+            starts.add(start);
+            ends.add(end);
+        }
+
+
+        // prints output from tokenization
+/*        int lgth = words.size();
+        for (int i = 0; i < lgth; i++) {
+            System.out.print(words.get(i)+ ": ");
+            System.out.print(starts.get(i) + ", ");
+            System.out.println(ends.get(i));
+        }*/
+
+        // turns text into the format Mallet requires
+        StringBuilder textFormatted = new StringBuilder();
+        for (String word: words){
+            textFormatted.append(word);
+            textFormatted.append('\n');
+        }
 
 
         try {
             Pipe p;
-            InputStream inputStream = this.getClass().getResourceAsStream("/masc_500k_texts.model");
-//            ObjectInputStream s =
-//                    new ObjectInputStream(new FileInputStream("src/main/resources/masc_500k_texts.model"));
-            ObjectInputStream s = new ObjectInputStream(inputStream);
 
+            // get trained model
+            InputStream inputStream = this.getClass().getResourceAsStream("/masc_500k_texts.model");
+            ObjectInputStream s = new ObjectInputStream(inputStream);
             CRF crf = (CRF) s.readObject();
             s.close();
+
+            // process input
             p = crf.getInputPipe();
             p.setTargetProcessing(false);
             instanceList = new InstanceList(p);
-
-            instanceList.addThruPipe(new LineGroupIterator(new StringReader(text),
+            instanceList.addThruPipe(new LineGroupIterator(new StringReader(textFormatted.toString()),
                     Pattern.compile("^\\s*$"), true));
             System.out.println("Number of predicates: " + p.getDataAlphabet().size());
+
+            // apply model
             for (int i = 0; i < instanceList.size(); i++) {
                 Sequence inputs = (Sequence) instanceList.get(i).getData();
                 Sequence[] outputs = apply(crf, inputs, 1);
@@ -122,23 +197,19 @@ public class SequenceTagging implements ProcessingService {
                     }
                 }
                 if (!error) {
-                    int start = 0;
                     for (int j = 0; j < inputs.size(); j++) {
 
-                        // getting the POS for each word
+                        // predicting the POS for each word
                         StringBuilder buf = new StringBuilder();
                         for (int a = 0; a < k; a++) {
-                            buf.append(outputs[a].get(j).toString()).append(" ");
+                            buf.append(outputs[a].get(j).toString());
                         }
 
-                        String word = inputs.get(j).toString();
-                        word = word.substring(0, word.length() - 1);
-                        start = text.indexOf(word, start);
-                        int end = start + word.length();
-                        Annotation a = view.newAnnotation("tok" + j, Discriminators.Uri.TOKEN, start, end);
+                        // adding annotations
+                        Annotation a = view.newAnnotation("tok" + j, Discriminators.Uri.TOKEN,
+                                starts.get(j), ends.get(j));
+                        a.addFeature(Features.Token.WORD, words.get(j));
                         a.addFeature(Features.Token.POS, buf.toString());
-
-                        System.out.println(word + " " + buf.toString());
                     }
                     System.out.println();
                 }
