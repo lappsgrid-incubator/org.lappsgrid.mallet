@@ -62,9 +62,12 @@ public class SequenceTagging implements ProcessingService {
         return generateMetadata();
     }
 
-    public String execute(String input) {
-        InstanceList instanceList;
+    // ArrayLists for holding information about tokens
+    ArrayList<String> words = new ArrayList<>();
+    ArrayList<Integer> starts = new ArrayList<>();
+    ArrayList<Integer> ends = new ArrayList<>();
 
+    public String execute(String input) {
         // Step #1: Parse the input.
         Data data = Serializer.parse(input, Data.class);
 
@@ -94,132 +97,80 @@ public class SequenceTagging implements ProcessingService {
         // Get the text from the container
         String text = container.getText();
 
-        // ArrayLists for holding information about tokens
-        ArrayList<String> words = new ArrayList<>();
-        ArrayList<Integer> starts = new ArrayList<>();
-        ArrayList<Integer> ends = new ArrayList<>();
-
-        // initialization of variables needed for tokenization
-        int charCount = 0, start = 0, end = 0;
-        StringBuilder token = new StringBuilder();
-        char[] punctuation = ":;.!?\'\"(){}[]".toCharArray();
-
-        // iterate through the text to tokenize
-        for (char ch : text.toCharArray()) {
-            if (Character.isLetter(ch)) { // process letters
-                token.append(ch);
-            } else if (Character.isSpaceChar(ch)) { // process space chars
-                if (token.length() > 0) {
-                    end = charCount - 1;
-                    words.add(token.toString());
-                    starts.add(start);
-                    ends.add(end);
-                    token = new StringBuilder();
-                }
-                start = charCount + 1;
-            } else if (ch == '\'' && token.length() > 0) { // process contractions
-                end = charCount - 1;
-                words.add(token.toString());
-                starts.add(start);
-                ends.add(end);
-
-                token = new StringBuilder();
-                token.append('\'');
-                start = charCount;
-            } else if (Arrays.binarySearch(punctuation, ch) != -1) { // process punctuation
-                if (token.length() > 0) {
-                    end = charCount - 1;
-                    words.add(token.toString());
-                    starts.add(start);
-                    ends.add(end);
-                }
-
-                start = charCount;
-                words.add(Character.toString(ch));
-                starts.add(start);
-                ends.add(start);
-
-                token = new StringBuilder();
-                start = charCount + 1;
-            }
-            charCount++;
-        }
-        if (token.length() > 0) {
-            end = charCount - 1;
-            words.add(token.toString());
-            starts.add(start);
-            ends.add(end);
-        }
-
-
-        // prints output from tokenization
-/*        int lgth = words.size();
-        for (int i = 0; i < lgth; i++) {
-            System.out.print(words.get(i)+ ": ");
-            System.out.print(starts.get(i) + ", ");
-            System.out.println(ends.get(i));
-        }*/
+        // tokenize the text. tokens go into the String[] words
+        // the starts and ends are stored in an int[]
+        tokenize(text);
 
         // turns text into the format Mallet requires
         StringBuilder textFormatted = new StringBuilder();
-        for (String word: words){
+        for (String word : words) {
             textFormatted.append(word);
             textFormatted.append('\n');
         }
 
+        // get the sequence tagging model file
+        String modelName = "masc_500k_texts";
+        InputStream inputStream =
+                this.getClass().getResourceAsStream
+                        ("/" + modelName + ".model");
 
+        // add the name of the model file to the metadata
+        data.setParameter("model", modelName + ".model");
+
+        CRF crf;
+        Pipe p;
         try {
-            Pipe p;
-
-            // get trained model
-            InputStream inputStream = this.getClass().getResourceAsStream("/masc_500k_texts.model");
+            // get trained sequence tagging model
             ObjectInputStream s = new ObjectInputStream(inputStream);
-            CRF crf = (CRF) s.readObject();
+            crf = (CRF) s.readObject();
             s.close();
-
-            // process input
-            p = crf.getInputPipe();
-            p.setTargetProcessing(false);
-            instanceList = new InstanceList(p);
-            instanceList.addThruPipe(new LineGroupIterator(new StringReader(textFormatted.toString()),
-                    Pattern.compile("^\\s*$"), true));
-            System.out.println("Number of predicates: " + p.getDataAlphabet().size());
-
-            // apply model
-            for (int i = 0; i < instanceList.size(); i++) {
-                Sequence inputs = (Sequence) instanceList.get(i).getData();
-                Sequence[] outputs = apply(crf, inputs, 1);
-                int k = outputs.length;
-                boolean error = false;
-                for (int a = 0; a < k; a++) {
-                    if (outputs[a].size() != inputs.size()) {
-                        error = true;
-                    }
-                }
-                if (!error) {
-                    for (int j = 0; j < inputs.size(); j++) {
-
-                        // predicting the POS for each word
-                        StringBuilder buf = new StringBuilder();
-                        for (int a = 0; a < k; a++) {
-                            buf.append(outputs[a].get(j).toString());
-                        }
-
-                        // adding annotations
-                        Annotation a = view.newAnnotation("tok" + j, Discriminators.Uri.TOKEN,
-                                starts.get(j), ends.get(j));
-                        a.addFeature(Features.Token.WORD, words.get(j));
-                        a.addFeature(Features.Token.POS, buf.toString());
-                    }
-                    System.out.println();
-                }
-            }
         } catch (IOException e) {
             e.printStackTrace();
-            System.out.println("Can't read file");
+            String message = String.format
+                    ("Unable to read model file: %s.model", modelName);
+            return new Data<>(Discriminators.Uri.ERROR, message).asJson();
         } catch (ClassNotFoundException e) {
             e.printStackTrace();
-            System.out.println("ClassNotFoundException");
+            String message = String.format
+                    ("Invalid model file: %s.model", modelName);
+            return new Data<>(Discriminators.Uri.ERROR, message).asJson();
+        }
+
+
+        // process input
+        p = crf.getInputPipe();
+        p.setTargetProcessing(false);
+        InstanceList instanceList = new InstanceList(p);
+        instanceList.addThruPipe
+                (new LineGroupIterator(new StringReader(textFormatted.toString()),
+                        Pattern.compile("^\\s*$"), true));
+
+        // apply model
+        for (Instance instance : instanceList){
+            Sequence inputs = (Sequence) instance.getData();
+            Sequence[] outputs = apply(crf, inputs, 1);
+            boolean error = false;
+            for (Sequence output : outputs){
+                if (output.size() != inputs.size()){
+                    error = true;
+                }
+            }
+            if (!error) {
+                for (int j = 0; j < inputs.size(); j++) {
+
+                    // predicting the POS for each word
+                    StringBuilder buf = new StringBuilder();
+                    for (Sequence output : outputs){
+                        buf.append(output.get(j).toString());
+                    }
+
+                    // adding annotations
+                    Annotation a = view.newAnnotation("tok" + j, Discriminators.Uri.TOKEN,
+                            starts.get(j), ends.get(j));
+                    a.addFeature(Features.Token.WORD, words.get(j));
+                    a.addFeature(Features.Token.POS, buf.toString());
+                }
+            }
         }
 
         // Step #6: Update the view's metadata. Each view contains metadata about the
@@ -233,5 +184,58 @@ public class SequenceTagging implements ProcessingService {
         // Step #8: Serialize the data object and return the JSON.
         return data.asPrettyJson();
 
+    }
+
+    public void tokenize(String text) {
+        // initialization of variables needed for tokenization
+        int charCount = 0, start = 0, end;
+        StringBuilder token = new StringBuilder();
+        char[] punctuation = ":;.!?\'\"(){}[]".toCharArray();
+
+        // iterate through the text to tokenize
+        for (char ch : text.toCharArray()) {
+            if (Character.isLetter(ch)) { // process letters
+                token.append(ch);
+            } else if (Character.isSpaceChar(ch)) { // process space chars
+                if (token.length() > 0) {
+                    end = charCount - 1;
+                    addToken(token, start, end);
+                    token = new StringBuilder();
+                }
+                start = charCount + 1;
+            } else if (ch == '\'' && token.length() > 0) { // process contractions
+                end = charCount - 1;
+                addToken(token, start, end);
+                token = new StringBuilder();
+                token.append('\'');
+                start = charCount;
+            } else if (Arrays.binarySearch(punctuation, ch) != -1) { // process punctuation
+                if (token.length() > 0) {
+                    end = charCount - 1;
+                    addToken(token, start, end);
+                }
+                start = charCount;
+                addToken(ch, start);
+                token = new StringBuilder();
+                start = charCount + 1;
+            }
+            charCount++;
+        }
+        if (token.length() > 0) { // process last token
+            end = charCount - 1;
+            addToken(token, start, end);
+        }
+    }
+
+    public void addToken(StringBuilder token, int start, int end) {
+        words.add(token.toString());
+        starts.add(start);
+        ends.add(end);
+    }
+
+    public void addToken(char ch, int start) {
+        words.add(Character.toString(ch));
+        starts.add(start);
+        ends.add(start);
     }
 }

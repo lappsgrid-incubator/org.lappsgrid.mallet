@@ -1,35 +1,29 @@
 package org.lappsgrid.mallet;
 
 
-
 import cc.mallet.classify.Classifier;
-import cc.mallet.pipe.iterator.CsvIterator;
 import cc.mallet.pipe.iterator.StringArrayIterator;
-import cc.mallet.types.Instance;
-import cc.mallet.types.Label;
 import cc.mallet.types.Labeling;
-import jdk.internal.util.xml.impl.Input;
 import org.lappsgrid.api.ProcessingService;
 import org.lappsgrid.discriminator.Discriminators.Uri;
 import org.lappsgrid.metadata.IOSpecification;
 import org.lappsgrid.metadata.ServiceMetadata;
 import org.lappsgrid.serialization.Data;
-import org.lappsgrid.serialization.DataContainer;
 import org.lappsgrid.serialization.Serializer;
-import org.lappsgrid.serialization.lif.Annotation;
 import org.lappsgrid.serialization.lif.Container;
 import org.lappsgrid.serialization.lif.View;
-import org.lappsgrid.vocabulary.Features;
 
-import java.io.*;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.ObjectInputStream;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 
 
-public class DocumentClassification implements ProcessingService
-{
-    public DocumentClassification() { }
+public class DocumentClassification implements ProcessingService {
+    public DocumentClassification() {
+    }
 
     private String generateMetadata() {
         // Create and populate the metadata object
@@ -78,64 +72,68 @@ public class DocumentClassification implements ProcessingService
         }
 
         // Step #3: Extract the text.
-        Container container = null;
+        Container container;
         if (discriminator.equals(Uri.TEXT)) {
             container = new Container();
             container.setText(data.getPayload().toString());
-        }
-        else if (discriminator.equals(Uri.LAPPS)) {
+        } else if (discriminator.equals(Uri.LAPPS)) {
             container = new Container((Map) data.getPayload());
-        }
-        else {
+        } else {
             // This is a format we don't accept.
             String message = String.format("Unsupported discriminator type: %s", discriminator);
-            return new Data<String>(Uri.ERROR, message).asJson();
+            return new Data<>(Uri.ERROR, message).asJson();
         }
 
         // Step #4: Create a new View
         View view = container.newView();
 
-        // Get input text and write a temporary file
+        // Get input text
         String text = container.getText();
+        StringArrayIterator sai = new StringArrayIterator
+                (new String[]{text});
 
-        // convert strings of file names in File objects
+        // get the classifier file
+        String classifierName = "masc_500k_texts";
         InputStream inputStream =
-                this.getClass().getResourceAsStream("/masc_500k_texts.classifier");
+                this.getClass().getResourceAsStream
+                        ("/" + classifierName + ".classifier");
 
+        // add the name of the classifier to the metadata
+        data.setParameter("classifier", classifierName + ".classifier");
+
+        // load the classifier
         Classifier classifier;
-        try
-        {
-            // load the classifier and guess the labeling of the input file
+        try {
             ObjectInputStream s = new ObjectInputStream(inputStream);
             classifier = (Classifier) s.readObject();
             s.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+            String message = String.format
+                    ("Unable to read classifier file: %s.classifier", classifierName);
+            return new Data<>(Uri.ERROR, message).asJson();
+        } catch (ClassNotFoundException e) {
+            e.printStackTrace();
+            String message = String.format
+                    ("Invalid classifier file: %s.classifier", classifierName);
+            return new Data<>(Uri.ERROR, message).asJson();
+        }
 
-            String[] stringArray = {text};
-            StringArrayIterator sai = new StringArrayIterator(stringArray);
-            Iterator instances =
-                    classifier.getInstancePipe().newIteratorFrom(sai);
+        // map to store the probability of the input being each document type
+        Map<String, Double> typeProbability = new HashMap<>();
 
-            Map<String,Double> rankings = new HashMap<>();
+        Iterator instances =
+                classifier.getInstancePipe().newIteratorFrom(sai);
+        while (instances.hasNext()) {
+            Labeling labeling = classifier.classify(instances.next()).getLabeling();
 
-            while (instances.hasNext()) {
-                Labeling labeling = classifier.classify(instances.next()).getLabeling();
-
-                // print the labels with their weights in descending order (ie best first)
-                for (int rank = 0; rank < labeling.numLocations(); rank++) {
-                    rankings.put(labeling.getLabelAtRank(rank).toString(), labeling.getValueAtRank(rank));
-                }
+            // print the labels with their weights in descending order (ie best first)
+            for (int rank = 0; rank < labeling.numLocations(); rank++) {
+                typeProbability.put(labeling.getLabelAtRank(rank).toString(), labeling.getValueAtRank(rank));
             }
-            data = new Data<Map>(Uri.JSON, rankings);
         }
-        catch (IOException e)
-        {
-            e.printStackTrace();
-            System.out.println("File not found.");
-        }
-        catch (ClassNotFoundException e)
-        {
-            e.printStackTrace();
-        }
+        data = new Data<Map>(Uri.JSON, typeProbability);
+
 
         // Step #6: Update the view's metadata. Each view contains metadata about the
         // annotations it contains, in particular the name of the tool that produced the

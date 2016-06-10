@@ -37,10 +37,14 @@ public class TestDocumentClassification {
 
     @Test
     public void testExecute() {
+        // test text
         final String text =
-                "Why did the chicken cross the road? To get to the other side!\n" +
-                "Ordinarily, staring is creepy. But if you spread your attention across many individuals, then it's just people watching.\n" +
-                        "We can teach kids there’s no i in team, but it’s way more important  to teach them that there’s no a in  definitely.";
+                "When you access Basic Completion by pressing Ctrl+Space, you get basic suggestions for variables, types, methods, expressions, and so on. When you call Basic Completion twice, it shows you more results, including private members and non-imported static members.\n" +
+                        "The Smart Completion feature is aware of the expected type and data flow, and offers the options relevant to the context. To call Smart Completion, press Ctrl+Shift+Space. When you call Smart Completion twice, it shows you more results, including chains.\n" +
+                        "To overwrite the identifier at the caret, instead of just inserting the suggestion, press Tab. This is helpful if you're editing part of an identifier, such as a file name.\n" +
+                        "To let IntelliJ IDEA complete a statement for you, press Ctrl+Shift+Enter. Statement Completion will automatically add the missing parentheses, brackets, braces and the necessary formatting.\n" +
+                        "If you want to see the suggested parameters for any method or constructor, press Ctrl+P. IntelliJ IDEA shows the parameter info for each overloaded method or constructor, and highlights the best match for the parameters already typed.\n" +
+                        "The Postfix Completion feature lets you transform an already typed expression to another one based on the postfix you type after a period, the expression type, and its context.";
 
         // wrap plain text into `Data`
         Data input = new Data<>(Discriminators.Uri.TEXT, text);
