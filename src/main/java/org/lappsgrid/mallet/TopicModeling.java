@@ -157,8 +157,11 @@ public class TopicModeling implements ProcessingService
         }
 
         // get the proportion of each topic in our text
+        int numIterations = 100;
+        int thinning = 10;
+        int burnIn = 10;
         double[] sampledDistribution =
-                ti.getSampledDistribution(instances.get(0), 100, 10, 10);
+                ti.getSampledDistribution(instances.get(0), numIterations, thinning, burnIn);
 
         // return an error if the inferencer contains a different number of
         // topics than the topic keys file
