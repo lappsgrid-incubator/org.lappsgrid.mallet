@@ -31,8 +31,8 @@ public class TopicModeling implements ProcessingService
         // Populate metadata using setX() methods
         metadata.setName(this.getClass().getName());
         metadata.setDescription("Mallet Topic Modeling");
-        metadata.setVersion("1.0.0-SNAPSHOT");
-        metadata.setVendor("http://www.lappsgrid.org");
+        metadata.setVersion(Version.getVersion());
+        metadata.setVendor("http://www.anc.org");
         metadata.setLicense(Discriminators.Uri.APACHE2);
 
         // JSON for input information

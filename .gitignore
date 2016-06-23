@@ -13,3 +13,5 @@ buildNumber.properties
 *.iws
 *.ipr
 *.iml
+src/**/Version.java
+VERSION
