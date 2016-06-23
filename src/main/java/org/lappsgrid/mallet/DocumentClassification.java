@@ -1,24 +1,29 @@
 package org.lappsgrid.mallet;
 
 
-
+import cc.mallet.classify.Classifier;
+import cc.mallet.pipe.iterator.StringArrayIterator;
+import cc.mallet.types.Labeling;
 import org.lappsgrid.api.ProcessingService;
 import org.lappsgrid.discriminator.Discriminators.Uri;
 import org.lappsgrid.metadata.IOSpecification;
 import org.lappsgrid.metadata.ServiceMetadata;
 import org.lappsgrid.serialization.Data;
-import org.lappsgrid.serialization.DataContainer;
 import org.lappsgrid.serialization.Serializer;
-import org.lappsgrid.serialization.lif.Annotation;
 import org.lappsgrid.serialization.lif.Container;
 import org.lappsgrid.serialization.lif.View;
-import org.lappsgrid.vocabulary.Features;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.ObjectInputStream;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 
-public class DocumentClassification implements ProcessingService
-{
-    public DocumentClassification() { }
+
+public class DocumentClassification implements ProcessingService {
+    public DocumentClassification() {
+    }
 
     private String generateMetadata() {
         // Create and populate the metadata object
@@ -26,9 +31,9 @@ public class DocumentClassification implements ProcessingService
 
         // Populate metadata using setX() methods
         metadata.setName(this.getClass().getName());
-        metadata.setDescription("Whitespace tokenizer");
-        metadata.setVersion("1.0.0-SNAPSHOT");
-        metadata.setVendor("http://www.lappsgrid.org");
+        metadata.setDescription("Mallet Document Classifier");
+        metadata.setVersion(Version.getVersion());
+        metadata.setVendor("http://www.anc.org");
         metadata.setLicense(Uri.APACHE2);
 
         // JSON for input information
@@ -67,47 +72,78 @@ public class DocumentClassification implements ProcessingService
         }
 
         // Step #3: Extract the text.
-        Container container = null;
+        Container container;
         if (discriminator.equals(Uri.TEXT)) {
             container = new Container();
             container.setText(data.getPayload().toString());
-        }
-        else if (discriminator.equals(Uri.LAPPS)) {
+        } else if (discriminator.equals(Uri.LAPPS)) {
             container = new Container((Map) data.getPayload());
-        }
-        else {
+        } else {
             // This is a format we don't accept.
             String message = String.format("Unsupported discriminator type: %s", discriminator);
-            return new Data<String>(Uri.ERROR, message).asJson();
+            return new Data<>(Uri.ERROR, message).asJson();
         }
 
         // Step #4: Create a new View
         View view = container.newView();
 
-        // Step #5: Tokenize the text and add annotations.
+        // Get input text
         String text = container.getText();
-        String[] words = text.split("\\s+");
-        int id = -1;
-        int start = 0;
-        for (String word : words) {
-            start = text.indexOf(word, start);
-            if (start < 0) {
-                return new Data<String>(Uri.ERROR, "Unable to match word: " + word).asJson();
-            }
-            int end = start + word.length();
-            Annotation a = view.newAnnotation("tok" + (++id), Uri.TOKEN, start, end);
-            a.addFeature(Features.Token.WORD, word);
+        StringArrayIterator sai = new StringArrayIterator
+                (new String[]{text});
+
+        // get the classifier file
+        String classifierName = "masc_500k_texts";
+        InputStream inputStream =
+                this.getClass().getResourceAsStream
+                        ("/" + classifierName + ".classifier");
+
+        // add the name of the classifier to the metadata
+        data.setParameter("classifier", classifierName + ".classifier");
+
+        // load the classifier
+        Classifier classifier;
+        try {
+            ObjectInputStream s = new ObjectInputStream(inputStream);
+            classifier = (Classifier) s.readObject();
+            s.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+            String message = String.format
+                    ("Unable to read classifier file: %s.classifier", classifierName);
+            return new Data<>(Uri.ERROR, message).asJson();
+        } catch (ClassNotFoundException e) {
+            e.printStackTrace();
+            String message = String.format
+                    ("Invalid classifier file: %s.classifier", classifierName);
+            return new Data<>(Uri.ERROR, message).asJson();
         }
+
+        // map to store the probability of the input being each document type
+        Map<String, Double> typeProbability = new HashMap<>();
+
+        Iterator instances =
+                classifier.getInstancePipe().newIteratorFrom(sai);
+        while (instances.hasNext()) {
+            Labeling labeling = classifier.classify(instances.next()).getLabeling();
+
+            // print the labels with their weights in descending order (ie best first)
+            for (int rank = 0; rank < labeling.numLocations(); rank++) {
+                typeProbability.put(labeling.getLabelAtRank(rank).toString(), labeling.getValueAtRank(rank));
+            }
+        }
+        data = new Data<Map>(Uri.JSON, typeProbability);
+
 
         // Step #6: Update the view's metadata. Each view contains metadata about the
         // annotations it contains, in particular the name of the tool that produced the
         // annotations.
-        view.addContains(Uri.TOKEN, this.getClass().getName(), "whitespace");
+        view.addContains(Uri.TOKEN, this.getClass().getName(), "labels");
 
         // Step #7: Create a DataContainer with the result.
-        data = new DataContainer(container);
+//        data = new DataContainer(container);
 
         // Step #8: Serialize the data object and return the JSON.
-        return data.asJson();
+        return data.asPrettyJson();
     }
 }

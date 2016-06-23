@@ -1,3 +1,5 @@
+masc_500k_texts/
+dataCOPY/
 target/
 pom.xml.tag
 pom.xml.releaseBackup
@@ -11,3 +13,5 @@ buildNumber.properties
 *.iws
 *.ipr
 *.iml
+src/**/Version.java
+VERSION
