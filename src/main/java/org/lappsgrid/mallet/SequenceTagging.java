@@ -18,6 +18,7 @@ import org.lappsgrid.serialization.lif.View;
 import org.lappsgrid.vocabulary.Features;
 
 import java.io.*;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.*;
 import java.util.regex.Pattern;
@@ -122,9 +123,14 @@ public class SequenceTagging implements ProcessingService {
             try {
                 URL url = new URL(model.toString());
                 inputStream = url.openStream();
-            } catch (Exception e){ // TODO: handle exceptions more specifically
+            } catch (MalformedURLException e) {
                 e.printStackTrace();
-                return null;
+                String message = "Path to file not valid";
+                return new Data<>(Discriminators.Uri.ERROR, message).asJson();
+            } catch (IOException e) {
+                e.printStackTrace();
+                String message = "Unable to open file";
+                return new Data<>(Discriminators.Uri.ERROR, message).asJson();
             }
         }
 
@@ -137,13 +143,11 @@ public class SequenceTagging implements ProcessingService {
             s.close();
         } catch (IOException e) {
             e.printStackTrace();
-            String message = String.format
-                    ("Unable to read model file: %s.model");
+            String message = "Unable to read model file";
             return new Data<>(Discriminators.Uri.ERROR, message).asJson();
         } catch (ClassNotFoundException e) {
             e.printStackTrace();
-            String message = String.format
-                    ("Invalid model file: %s.model");
+            String message = "Invalid model file";
             return new Data<>(Discriminators.Uri.ERROR, message).asJson();
         }
 

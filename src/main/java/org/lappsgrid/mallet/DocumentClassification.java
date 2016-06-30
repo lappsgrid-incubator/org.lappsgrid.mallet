@@ -17,6 +17,7 @@ import org.lappsgrid.serialization.lif.View;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.ObjectInputStream;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -105,9 +106,14 @@ public class DocumentClassification implements ProcessingService {
             try {
                 URL url = new URL(classifier.toString());
                 inputStream = url.openStream();
-            } catch (Exception e){ // TODO: handle exceptions more specifically
+            } catch (MalformedURLException e) {
                 e.printStackTrace();
-                return null;
+                String message = "Path to file not valid";
+                return new Data<>(Uri.ERROR, message).asJson();
+            } catch (IOException e) {
+                e.printStackTrace();
+                String message = "Unable to open file";
+                return new Data<>(Uri.ERROR, message).asJson();
             }
         }
 
@@ -119,13 +125,11 @@ public class DocumentClassification implements ProcessingService {
             ois.close();
         } catch (IOException e) {
             e.printStackTrace();
-            String message = String.format
-                    ("Unable to read classifier file: %s.classifier");
+            String message = "Unable to read classifier file";
             return new Data<>(Uri.ERROR, message).asJson();
         } catch (ClassNotFoundException e) {
             e.printStackTrace();
-            String message = String.format
-                    ("Invalid classifier file: %s.classifier");
+            String message = "Invalid classifier file";
             return new Data<>(Uri.ERROR, message).asJson();
         }
 

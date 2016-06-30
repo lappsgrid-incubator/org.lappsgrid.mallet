@@ -16,6 +16,7 @@ import org.lappsgrid.serialization.lif.Container;
 import org.lappsgrid.serialization.lif.View;
 
 import java.io.*;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -148,9 +149,14 @@ public class TopicModeling implements ProcessingService
             try {
                 URL url = new URL(keys.toString());
                 inputStream = url.openStream();
-            } catch (Exception e){ // TODO: handle exceptions more specifically
+            } catch (MalformedURLException e) {
                 e.printStackTrace();
-                return null;
+                String message = "Path to file not valid";
+                return new Data<>(Discriminators.Uri.ERROR, message).asJson();
+            } catch (IOException e) {
+                e.printStackTrace();
+                String message = "Unable to open file";
+                return new Data<>(Discriminators.Uri.ERROR, message).asJson();
             }
         }
         br = new BufferedReader(new InputStreamReader(inputStream));
