@@ -34,9 +34,10 @@ public class SequenceTagging implements ProcessingService {
 
         // Populate metadata using setX() methods
         metadata.setName(this.getClass().getName());
+        metadata.setAllow(Discriminators.Uri.ANY);
         metadata.setDescription("Mallet Sequence Tagging");
         metadata.setVersion(Version.getVersion());
-        metadata.setVendor("http://www.anc.org");
+        metadata.setVendor("http://www.lappsgrid.org");
         metadata.setLicense(Discriminators.Uri.APACHE2);
 
         // JSON for input information
@@ -48,7 +49,7 @@ public class SequenceTagging implements ProcessingService {
         IOSpecification produces = new IOSpecification();
         produces.addFormat(Discriminators.Uri.LAPPS);          // LIF (form)
         produces.addAnnotation(Discriminators.Uri.TOKEN);      // Tokens (contents)
-        requires.addLanguage("en");             // Target language
+        produces.addLanguage("en");             // Target language
 
         // Embed I/O metadata JSON objects
         metadata.setRequires(requires);

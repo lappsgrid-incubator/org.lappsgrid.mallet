@@ -32,6 +32,7 @@ public class TopicModeling implements ProcessingService
 
         // Populate metadata using setX() methods
         metadata.setName(this.getClass().getName());
+        metadata.setAllow(Discriminators.Uri.ANY);
         metadata.setDescription("Mallet Topic Modeling");
         metadata.setVersion(Version.getVersion());
         metadata.setVendor("http://http://www.lappsgrid.org/");
@@ -45,7 +46,7 @@ public class TopicModeling implements ProcessingService
         // JSON for output information
         IOSpecification produces = new IOSpecification();
         produces.addFormat(Discriminators.Uri.LAPPS);          // LIF (form)
-        requires.addLanguage("en");             // Target language
+        produces.addLanguage("en");             // Target language
 
         // Embed I/O metadata JSON objects
         metadata.setRequires(requires);
@@ -61,7 +62,7 @@ public class TopicModeling implements ProcessingService
     }
 
     Data data;
-    public String execute(String input) { // TODO: for all 3 classes: add trainer parameters to metadata?
+    public String execute(String input) {
         // Step #1: Parse the input.
         data = Serializer.parse(input, Data.class);
 

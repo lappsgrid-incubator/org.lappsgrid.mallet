@@ -32,6 +32,7 @@ public class DocumentClassification implements ProcessingService {
 
         // Populate metadata using setX() methods
         metadata.setName(this.getClass().getName());
+        metadata.setAllow(Uri.ANY);
         metadata.setDescription("Mallet Document Classifier");
         metadata.setVersion(Version.getVersion());
         metadata.setVendor("http://www.anc.org");
@@ -45,8 +46,7 @@ public class DocumentClassification implements ProcessingService {
         // JSON for output information
         IOSpecification produces = new IOSpecification();
         produces.addFormat(Uri.LAPPS);          // LIF (form)
-        produces.addAnnotation(Uri.TOKEN);      // Tokens (contents)
-        requires.addLanguage("en");             // Target language
+        produces.addLanguage("en");             // Target language
 
         // Embed I/O metadata JSON objects
         metadata.setRequires(requires);
