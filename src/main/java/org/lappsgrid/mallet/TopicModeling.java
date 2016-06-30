@@ -6,25 +6,21 @@ import cc.mallet.pipe.*;
 import cc.mallet.pipe.iterator.StringArrayIterator;
 import cc.mallet.topics.TopicInferencer;
 import cc.mallet.types.InstanceList;
-import com.sun.jndi.toolkit.url.Uri;
-import jp.go.nict.langrid.repackaged.net.arnx.jsonic.JSON;
-import org.apache.axis.Version;
 import org.lappsgrid.api.ProcessingService;
 import org.lappsgrid.discriminator.Discriminators;
 import org.lappsgrid.metadata.IOSpecification;
 import org.lappsgrid.metadata.ServiceMetadata;
 import org.lappsgrid.serialization.Data;
-import org.lappsgrid.serialization.DataContainer;
 import org.lappsgrid.serialization.Serializer;
 import org.lappsgrid.serialization.lif.Container;
 import org.lappsgrid.serialization.lif.View;
 
 import java.io.*;
-import java.net.URI;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+
 
 public class TopicModeling implements ProcessingService
 {
@@ -38,7 +34,7 @@ public class TopicModeling implements ProcessingService
         metadata.setName(this.getClass().getName());
         metadata.setDescription("Mallet Topic Modeling");
         metadata.setVersion(Version.getVersion());
-        metadata.setVendor("http://www.anc.org");
+        metadata.setVendor("http://http://www.lappsgrid.org/");
         metadata.setLicense(Discriminators.Uri.APACHE2);
 
         // JSON for input information
@@ -49,7 +45,6 @@ public class TopicModeling implements ProcessingService
         // JSON for output information
         IOSpecification produces = new IOSpecification();
         produces.addFormat(Discriminators.Uri.LAPPS);          // LIF (form)
-        produces.addAnnotation(Discriminators.Uri.TOKEN);      // Tokens (contents)
         requires.addLanguage("en");             // Target language
 
         // Embed I/O metadata JSON objects

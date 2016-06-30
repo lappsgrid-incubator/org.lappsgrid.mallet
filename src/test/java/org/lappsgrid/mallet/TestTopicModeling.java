@@ -1,20 +1,23 @@
 package org.lappsgrid.mallet;
 
-import cc.mallet.topics.TopicInferencer;
+// JUnit modules for unit tests
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.lappsgrid.api.WebService;
 import org.lappsgrid.discriminator.Discriminators;
+import org.lappsgrid.metadata.IOSpecification;
+import org.lappsgrid.metadata.ServiceMetadata;
 import org.lappsgrid.serialization.Data;
+import org.lappsgrid.serialization.Serializer;
 
-import java.io.*;
-import java.net.MalformedURLException;
-import java.net.URI;
-import java.net.URISyntaxException;
+import java.io.IOException;
 import java.net.URL;
-import java.nio.file.Paths;
+import java.util.List;
+import java.util.Map;
 
+import static org.junit.Assert.*;
+import static org.lappsgrid.discriminator.Discriminators.Uri;
 
 public class TestTopicModeling {
 
@@ -35,6 +38,30 @@ public class TestTopicModeling {
 
     @Test
     public void testMetadata() {
+        WebService service = new TopicModeling();
+
+        // Retrieve metadata, remember `getMetadata()` returns a serialized JSON string
+        String json = service.getMetadata();
+        assertNotNull("service.getMetadata() returned null", json);
+
+        // Instantiate `Data` object with returned JSON string
+        Data data = Serializer.parse(json, Data.class);
+        assertNotNull("Unable to parse metadata json.", data);
+        assertNotSame(data.getPayload().toString(), Discriminators.Uri.ERROR, data.getDiscriminator());
+
+        // Then, convert it into `Metadata` datastructure
+        ServiceMetadata metadata = new ServiceMetadata((Map) data.getPayload());
+        IOSpecification produces = metadata.getProduces();
+        IOSpecification requires = metadata.getRequires();
+
+        // Now, see each field has correct value
+        assertEquals("Name is not correct", TopicModeling.class.getName(), metadata.getName());
+        assertEquals("\"allow\" field not equal", Uri.ANY, metadata.getAllow());
+        assertEquals("License not correct", Uri.APACHE2, metadata.getLicense());
+
+        List<String> list = requires.getFormat();
+        assertTrue("Text not accepted", list.contains(Uri.TEXT));
+        assertTrue("Required languages do not contain English", requires.getLanguage().contains("en"));
     }
 
     @Test
