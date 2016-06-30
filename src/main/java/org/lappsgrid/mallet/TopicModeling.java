@@ -6,16 +6,22 @@ import cc.mallet.pipe.*;
 import cc.mallet.pipe.iterator.StringArrayIterator;
 import cc.mallet.topics.TopicInferencer;
 import cc.mallet.types.InstanceList;
+import com.sun.jndi.toolkit.url.Uri;
+import jp.go.nict.langrid.repackaged.net.arnx.jsonic.JSON;
+import org.apache.axis.Version;
 import org.lappsgrid.api.ProcessingService;
 import org.lappsgrid.discriminator.Discriminators;
 import org.lappsgrid.metadata.IOSpecification;
 import org.lappsgrid.metadata.ServiceMetadata;
 import org.lappsgrid.serialization.Data;
+import org.lappsgrid.serialization.DataContainer;
 import org.lappsgrid.serialization.Serializer;
 import org.lappsgrid.serialization.lif.Container;
 import org.lappsgrid.serialization.lif.View;
 
 import java.io.*;
+import java.net.URI;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
@@ -59,9 +65,10 @@ public class TopicModeling implements ProcessingService
         return generateMetadata();
     }
 
+    Data data;
     public String execute(String input) { // TODO: for all 3 classes: add trainer parameters to metadata?
         // Step #1: Parse the input.
-        Data data = Serializer.parse(input, Data.class);
+        data = Serializer.parse(input, Data.class);
 
         // Step #2: Check the discriminator
         final String discriminator = data.getDiscriminator();
@@ -101,36 +108,58 @@ public class TopicModeling implements ProcessingService
         instances.addThruPipe(new StringArrayIterator
                 (new String[]{text}));
 
-        // get the sequence tagging model inferencer file
-        String inferencerName = "masc_500k_texts";
-        InputStream inputStream =
-                this.getClass().getResourceAsStream
-                        ("/" + inferencerName + ".inferencer");
+        // get the topic modeling inferencer file as an InputStream
+        Object inferencer = data.getParameter("inferencer");
+        InputStream inputStream;
+        if (inferencer == null) {
+            String defaultInferencer = "/masc_500k_texts.inferencer";
+            inputStream = this.getClass().getResourceAsStream(defaultInferencer);
+            data.setParameter("inferencer", inputStream);
+        } else {
+            try {
+                URL url = new URL(inferencer.toString());
+                inputStream = url.openStream();
+            } catch (Exception e){ // TODO: handle exceptions more specifically
+                e.printStackTrace();
+                return null;
+            }
+        }
 
-        // add the name of the model file to the metadata
-        data.setParameter("model", inferencerName + ".inferencer");
-
+        // turn the inferencer InputStream into a TopicInferencer object
         TopicInferencer ti;
         try {
-            // get trained sequence tagging model
             ObjectInputStream ois = new ObjectInputStream(inputStream);
             ti = (TopicInferencer) ois.readObject();
             ois.close();
         } catch (IOException e) {
             e.printStackTrace();
-            String message = String.format
-                    ("Unable to read inferencer file: %s.inferencer", inferencerName);
+            String message = "Unable to read inferencer file";
             return new Data<>(Discriminators.Uri.ERROR, message).asJson();
         } catch (ClassNotFoundException e) {
             e.printStackTrace();
-            String message = String.format
-                    ("Invalid inferencer file: %s.inferencer", inferencerName);
+            String message = "Invalid inferencer file";
             return new Data<>(Discriminators.Uri.ERROR, message).asJson();
         }
 
+        // get the topic modeling topic keys file
+        BufferedReader br;
+        Object keys = data.getParameter("keys");
+        String defaultKeys = "/masc_500k_texts_topic_keys.txt";
+        if (keys == null || keys == defaultKeys) {
+            inputStream = this.getClass().getResourceAsStream(defaultKeys);
+            data.setParameter("keys", defaultKeys);
+        } else{
+            try {
+                URL url = new URL(keys.toString());
+                inputStream = url.openStream();
+            } catch (Exception e){ // TODO: handle exceptions more specifically
+                e.printStackTrace();
+                return null;
+            }
+        }
+        br = new BufferedReader(new InputStreamReader(inputStream));
+
         // read the topic keys .txt file and store topics in an ArrayList
-        InputStream is = this.getClass().getResourceAsStream("/masc_500k_texts_topic_keys.txt");
-        BufferedReader br = new BufferedReader(new InputStreamReader(is));
         ArrayList<String> topicKeys = new ArrayList<>();
         String line;
         try {
@@ -138,9 +167,11 @@ public class TopicModeling implements ProcessingService
                 int tabs = 0;
                 int lgth = line.length();
                 for (int i = 0; i < lgth; i++){
+                    // looking for 2 tabs
                     if (Character.isSpaceChar(line.charAt(i))){
                         tabs++;
                     }
+                    // topic keys start on 3rd column (after 2 tabs)
                     if (tabs == 2){
                         if (lgth > i) {
                             topicKeys.add(line.substring(i+1));
@@ -156,10 +187,18 @@ public class TopicModeling implements ProcessingService
             return new Data<>(Discriminators.Uri.ERROR, message).asJson();
         }
 
+        // get sampling parameters
+        int numIterations, thinning, burnIn;
+        try {
+            numIterations = getIntParameter("numIterations", 100);
+            thinning = getIntParameter("thinning", 10);
+            burnIn = getIntParameter("burnIn", 10);
+        } catch (ClassCastException e){
+            e.printStackTrace();
+            return new Data<>(Discriminators.Uri.ERROR, e.getMessage()).asJson();
+        }
+
         // get the proportion of each topic in our text
-        int numIterations = 100;
-        int thinning = 10;
-        int burnIn = 10;
         double[] sampledDistribution =
                 ti.getSampledDistribution(instances.get(0), numIterations, thinning, burnIn);
 
@@ -179,7 +218,8 @@ public class TopicModeling implements ProcessingService
         for (int i = 0; i < numberOfTopics; i++){
             topicProportions.put(topicKeys.get(i), sampledDistribution[i]);
         }
-        data = new Data<Map>(Discriminators.Uri.JSON, topicProportions);
+        data.setPayload(topicProportions);
+        data.setDiscriminator(Discriminators.Uri.JSON);
 
         // Step #6: Update the view's metadata. Each view contains metadata about the
         // annotations it contains, in particular the name of the tool that produced the
@@ -191,5 +231,23 @@ public class TopicModeling implements ProcessingService
 
         // Step #8: Serialize the data object and return the JSON.
         return data.asPrettyJson();
+    }
+
+    // gets an integer parameter from the data being passed through
+    public int getIntParameter(String parameterName, int defaultInt) throws ClassCastException{
+        Object temp;
+
+        temp = data.getParameter(parameterName);
+        if (temp == null){
+            data.setParameter(parameterName, defaultInt);
+            return defaultInt;
+        }
+        if (temp instanceof Integer) {
+            return (int) temp;
+        } else {
+            ClassCastException e =
+                    new ClassCastException("Unable to use parameter: " + parameterName);
+            throw e;
+        }
     }
 }

@@ -4,6 +4,7 @@ package org.lappsgrid.mallet;
 import cc.mallet.classify.Classifier;
 import cc.mallet.pipe.iterator.StringArrayIterator;
 import cc.mallet.types.Labeling;
+import org.apache.axis.Version;
 import org.lappsgrid.api.ProcessingService;
 import org.lappsgrid.discriminator.Discriminators.Uri;
 import org.lappsgrid.metadata.IOSpecification;
