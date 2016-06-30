@@ -110,7 +110,7 @@ public class TopicModeling implements ProcessingService
         if (inferencer == null) {
             String defaultInferencer = "/masc_500k_texts.inferencer";
             inputStream = this.getClass().getResourceAsStream(defaultInferencer);
-            data.setParameter("inferencer", inputStream);
+            data.setParameter("inferencer", this.getClass().getResource(defaultInferencer));
         } else {
             try {
                 URL url = new URL(inferencer.toString());
@@ -143,7 +143,7 @@ public class TopicModeling implements ProcessingService
         String defaultKeys = "/masc_500k_texts_topic_keys.txt";
         if (keys == null || keys == defaultKeys) {
             inputStream = this.getClass().getResourceAsStream(defaultKeys);
-            data.setParameter("keys", defaultKeys);
+            data.setParameter("keys", this.getClass().getResource(defaultKeys));
         } else{
             try {
                 URL url = new URL(keys.toString());

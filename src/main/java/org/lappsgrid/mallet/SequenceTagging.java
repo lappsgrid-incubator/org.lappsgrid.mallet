@@ -18,6 +18,7 @@ import org.lappsgrid.serialization.lif.View;
 import org.lappsgrid.vocabulary.Features;
 
 import java.io.*;
+import java.net.URL;
 import java.util.*;
 import java.util.regex.Pattern;
 
@@ -110,14 +111,22 @@ public class SequenceTagging implements ProcessingService {
             textFormatted.append('\n');
         }
 
-        // get the sequence tagging model file
-        String modelName = "masc_500k_texts";
-        InputStream inputStream =
-                this.getClass().getResourceAsStream
-                        ("/" + modelName + ".model");
-
-        // add the name of the model file to the metadata
-        data.setParameter("model", modelName + ".model");
+        // get the sequence tagging .model file as an InputStream
+        Object model = data.getParameter("model");
+        InputStream inputStream;
+        if (model == null) {
+            String defaultModel = "/masc_500k_texts.model";
+            inputStream = this.getClass().getResourceAsStream(defaultModel);
+            data.setParameter("model", this.getClass().getResource(defaultModel));
+        } else {
+            try {
+                URL url = new URL(model.toString());
+                inputStream = url.openStream();
+            } catch (Exception e){ // TODO: handle exceptions more specifically
+                e.printStackTrace();
+                return null;
+            }
+        }
 
         CRF crf;
         Pipe p;
@@ -129,12 +138,12 @@ public class SequenceTagging implements ProcessingService {
         } catch (IOException e) {
             e.printStackTrace();
             String message = String.format
-                    ("Unable to read model file: %s.model", modelName);
+                    ("Unable to read model file: %s.model");
             return new Data<>(Discriminators.Uri.ERROR, message).asJson();
         } catch (ClassNotFoundException e) {
             e.printStackTrace();
             String message = String.format
-                    ("Invalid model file: %s.model", modelName);
+                    ("Invalid model file: %s.model");
             return new Data<>(Discriminators.Uri.ERROR, message).asJson();
         }
 
