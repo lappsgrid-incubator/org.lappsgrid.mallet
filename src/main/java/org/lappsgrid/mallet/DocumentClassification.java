@@ -17,6 +17,7 @@ import org.lappsgrid.serialization.lif.View;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.ObjectInputStream;
+import java.net.URL;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -35,7 +36,7 @@ public class DocumentClassification implements ProcessingService {
         metadata.setAllow(Uri.ANY);
         metadata.setDescription("Mallet Document Classifier");
         metadata.setVersion(Version.getVersion());
-        metadata.setVendor("http://www.anc.org");
+        metadata.setVendor("http://www.lappsgrid.org");
         metadata.setLicense(Uri.APACHE2);
 
         // JSON for input information
@@ -93,30 +94,38 @@ public class DocumentClassification implements ProcessingService {
         StringArrayIterator sai = new StringArrayIterator
                 (new String[]{text});
 
-        // get the classifier file
-        String classifierName = "masc_500k_texts";
-        InputStream inputStream =
-                this.getClass().getResourceAsStream
-                        ("/" + classifierName + ".classifier");
-
-        // add the name of the classifier to the metadata
-        data.setParameter("classifier", classifierName + ".classifier");
+        // get the document classification .classifier file as an InputStream
+        Object classifier = data.getParameter("classifier");
+        InputStream inputStream;
+        if (classifier == null) {
+            String defaultClassifier = "/masc_500k_texts.classifier";
+            inputStream = this.getClass().getResourceAsStream(defaultClassifier);
+            data.setParameter("model", this.getClass().getResource(defaultClassifier));
+        } else {
+            try {
+                URL url = new URL(classifier.toString());
+                inputStream = url.openStream();
+            } catch (Exception e){ // TODO: handle exceptions more specifically
+                e.printStackTrace();
+                return null;
+            }
+        }
 
         // load the classifier
-        Classifier classifier;
+        Classifier c;
         try {
-            ObjectInputStream s = new ObjectInputStream(inputStream);
-            classifier = (Classifier) s.readObject();
-            s.close();
+            ObjectInputStream ois = new ObjectInputStream(inputStream);
+            c = (Classifier) ois.readObject();
+            ois.close();
         } catch (IOException e) {
             e.printStackTrace();
             String message = String.format
-                    ("Unable to read classifier file: %s.classifier", classifierName);
+                    ("Unable to read classifier file: %s.classifier");
             return new Data<>(Uri.ERROR, message).asJson();
         } catch (ClassNotFoundException e) {
             e.printStackTrace();
             String message = String.format
-                    ("Invalid classifier file: %s.classifier", classifierName);
+                    ("Invalid classifier file: %s.classifier");
             return new Data<>(Uri.ERROR, message).asJson();
         }
 
@@ -124,9 +133,9 @@ public class DocumentClassification implements ProcessingService {
         Map<String, Double> typeProbability = new HashMap<>();
 
         Iterator instances =
-                classifier.getInstancePipe().newIteratorFrom(sai);
+                c.getInstancePipe().newIteratorFrom(sai);
         while (instances.hasNext()) {
-            Labeling labeling = classifier.classify(instances.next()).getLabeling();
+            Labeling labeling = c.classify(instances.next()).getLabeling();
 
             // print the labels with their weights in descending order (ie best first)
             for (int rank = 0; rank < labeling.numLocations(); rank++) {
