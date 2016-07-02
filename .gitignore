@@ -1,5 +1,5 @@
 masc_500k_texts/
-dataCOPY/
+masc_500k_texts_word_by_word/
 target/
 pom.xml.tag
 pom.xml.releaseBackup

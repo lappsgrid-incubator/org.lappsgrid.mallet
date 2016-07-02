@@ -5,8 +5,6 @@ import cc.mallet.classify.*;
 import cc.mallet.pipe.*;
 import cc.mallet.pipe.iterator.FileIterator;
 import cc.mallet.types.InstanceList;
-import com.sun.javaws.exceptions.InvalidArgumentException;
-import org.apache.commons.lang.ObjectUtils;
 import org.lappsgrid.api.ProcessingService;
 import org.lappsgrid.discriminator.Discriminators;
 import org.lappsgrid.metadata.IOSpecification;

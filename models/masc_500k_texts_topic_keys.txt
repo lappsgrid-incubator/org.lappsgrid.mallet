@@ -1,0 +1,10 @@
+0	0.0357	patients expression liver yhl gad species years disease figure scientific 
+1	0.07573	url twitter day watching work http://bit.ly moore posted i'm news 
+2	0.24549	it's don't that's yeah i'm time question i've people we're 
+3	0.47737	people president make states world united support america state government 
+4	0.18156	back head man time sequels prequels asked people life day 
+5	0.08208	hong kong city style building wildlife chinese vegas house las 
+6	0.18376	service postal financial set system mail commission information power work 
+7	0.2909	subject date channel million nest email company information figure message 
+8	0.02999	jack sparrow elizabeth turner gibbs swann jones grant captain clark 
+9	0.06816	white language color sonoma indigenous county words jerusalem document land 

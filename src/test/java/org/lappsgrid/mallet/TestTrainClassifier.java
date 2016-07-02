@@ -1,18 +1,16 @@
 package org.lappsgrid.mallet;
 
 // JUnit modules for unit tests
-import cc.mallet.classify.MaxEnt;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import static org.junit.Assert.*;
-
-// more APIs for testing code
 import org.lappsgrid.api.WebService;
 import org.lappsgrid.discriminator.Discriminators;
 import org.lappsgrid.serialization.Data;
 
 import java.io.IOException;
+
+// more APIs for testing code
 
 
 public class TestTrainClassifier {

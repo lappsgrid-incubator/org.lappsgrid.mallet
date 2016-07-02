@@ -11,6 +11,7 @@ import org.lappsgrid.discriminator.Discriminators;
 import org.lappsgrid.metadata.IOSpecification;
 import org.lappsgrid.metadata.ServiceMetadata;
 import org.lappsgrid.serialization.Data;
+import org.lappsgrid.serialization.Serializer;
 
 import java.io.*;
 import java.util.*;
@@ -40,7 +41,7 @@ public class TrainTopicModeling implements ProcessingService
         IOSpecification produces = new IOSpecification();
         produces.addFormat(Discriminators.Uri.LAPPS);          // LIF (form)
         produces.addAnnotation(Discriminators.Uri.TOKEN);      // Tokens (contents)
-        requires.addLanguage("en");             // Target language
+        produces.addLanguage("en");             // Target language
 
         // Embed I/O metadata JSON objects
         metadata.setRequires(requires);
@@ -55,89 +56,73 @@ public class TrainTopicModeling implements ProcessingService
         return generateMetadata();
     }
 
-    ArrayList<String> trainingFiles = new ArrayList<String>();
     Pipe pipe;
     public String execute(String input) {
-        // Begin by importing documents from text to feature sequences
-        ArrayList<Pipe> pipeList = new ArrayList<Pipe>();
+        // Step #1: Parse the input.
+        Data data = Serializer.parse(input, Data.class);
 
+        // Step #2: Check the discriminator
+        final String discriminator = data.getDiscriminator();
+        if (discriminator.equals(Discriminators.Uri.ERROR)) {
+            // Return the input unchanged.
+            return input;
+        }
+
+        // Create a series of pipes to process the training files
+        ArrayList<Pipe> pipeList = new ArrayList<>();
         pipeList.add(new Input2CharSequence("UTF-8"));
         // Pipes: lowercase, tokenize, remove stopwords, map to features
         pipeList.add( new CharSequenceLowercase() );
         pipeList.add( new CharSequence2TokenSequence(Pattern.compile("\\p{L}[\\p{L}\\p{P}]+\\p{L}")) );
         pipeList.add( new TokenSequenceRemoveStopwords());
-        pipeList.add( new TokenSequence2FeatureSequence() );
+        pipeList.add( new TokenSequence2FeatureSequence());
         pipe = new SerialPipes(pipeList);
 
-        InstanceList instances = readDirectory(new File(input));
+        // put the directory of files used for training through the pipes
+        String directory = data.getParameter("directory").toString();
+        InstanceList instances = readDirectory(new File(directory));
 
-/*        // creating a .mallet file that holds all of the input
-        String fileName = input + ".mallet";
-        File file = new File(fileName);
-        try {
-            if (!file.createNewFile()) {
-                System.out.println(".mallet file already exists");
-                return null;
-            }
-            ObjectOutputStream oos;
-            oos = new ObjectOutputStream(new FileOutputStream(input + ".mallet"));
-            oos.writeObject(instances);
-            oos.close();
-        } catch (IOException e) {
-            System.out.println("Error writing .mallet file");
-            return null;
-        }*/
-
-        int numberOfTopics = 10;
-        double alpha = 5.0;
-        double beta = 0.1;
-        ParallelTopicModel topicModel = new ParallelTopicModel (numberOfTopics, alpha, beta);
-
-
+        // create a topic to be trained
+        int numberOfTopics = (Integer) data.getParameter("numTopics");
+        ParallelTopicModel topicModel = new ParallelTopicModel(numberOfTopics);
         topicModel.addInstances(instances);
 
-        topicModel.setTopicDisplay(50, 20);
-
-        topicModel.setNumIterations(1000);
-        topicModel.setOptimizeInterval(0);
-        topicModel.setBurninPeriod(200);
-        topicModel.setSymmetricAlpha(false);
-        topicModel.setNumThreads(1);
+        // train the model
         try {
             topicModel.estimate();
         } catch (IOException e){
-            return null;
+            e.printStackTrace();
+            return new Data<>(Discriminators.Uri.ERROR,
+                    "Unable to train the model").asJson();
         }
 
         // write topic keys file
+        String path = data.getParameter("path").toString();
+        String keysName = data.getParameter("keysName").toString();
+        int wordsPerTopic = (Integer) data.getParameter("wordsPerTopic");
         try {
-            topicModel.printTopWords(new File(input + "TopWords.txt"), 20, false);
+            topicModel.printTopWords(new File(path + "/" + keysName), wordsPerTopic, false);
         } catch (IOException e) {
-            System.out.println("Error writing topic keys file");
+            e.printStackTrace();
+            return new Data<>(Discriminators.Uri.ERROR,
+                    "Unable to write the topic keys to " + path + "/" + keysName).asJson();
         }
 
-        // write topic decomposition file
-/*
+        // write the .inferencer file
+        String inferencerName = data.getParameter("inferencerName").toString();
         try {
-            PrintWriter out = new PrintWriter(new FileWriter((new File(input + "TopicDecomposition.txt"))));
-            topicModel.printTopicDocuments(out, 100);
-            out.close();
-        } catch (IOException e) {
-            System.out.println("Error writing document topic decomposition file");
-        }
-*/
-
-        try {
-
             ObjectOutputStream oos =
-                    new ObjectOutputStream (new FileOutputStream (input + ".inferencer"));
+                    new ObjectOutputStream (new FileOutputStream (path + "/" + inferencerName));
             oos.writeObject (topicModel.getInferencer());
             oos.close();
-
         } catch (Exception e) {
-            System.out.println("Couldn't write topic model inferencer to filename " + input + ".inferencer");
+            e.printStackTrace();
+            return new Data<>(Discriminators.Uri.ERROR,
+                    "Unable to write the inferencer to " + path + "/" + inferencerName).asJson();
         }
-        return null;
+
+        // Success
+        return new Data<>(Discriminators.Uri.TEXT, "Success").asJson();
     }
 
     public InstanceList readDirectory(File directory) {
