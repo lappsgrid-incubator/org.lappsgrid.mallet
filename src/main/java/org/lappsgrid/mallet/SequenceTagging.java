@@ -1,9 +1,10 @@
 package org.lappsgrid.mallet;
 
-import cc.mallet.fst.*;
-import cc.mallet.pipe.*;
-import cc.mallet.pipe.iterator.LineGroupIterator;
-import cc.mallet.types.*;
+import cc.mallet.fst.CRF;
+import cc.mallet.pipe.iterator.StringArrayIterator;
+import cc.mallet.types.InstanceList;
+import cc.mallet.types.Sequence;
+import cc.mallet.types.Token;
 import org.apache.axis.Version;
 import org.lappsgrid.api.ProcessingService;
 import org.lappsgrid.discriminator.Discriminators;
@@ -17,13 +18,14 @@ import org.lappsgrid.serialization.lif.Container;
 import org.lappsgrid.serialization.lif.View;
 import org.lappsgrid.vocabulary.Features;
 
-import java.io.*;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.ObjectInputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.util.*;
-import java.util.regex.Pattern;
-
-import static cc.mallet.fst.SimpleTagger.apply;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Map;
 
 
 public class SequenceTagging implements ProcessingService {
@@ -101,16 +103,10 @@ public class SequenceTagging implements ProcessingService {
         // Get the text from the container
         String text = container.getText();
 
+
         // tokenize the text. tokens go into the String[] words
         // the starts and ends are stored in an int[]
         tokenize(text);
-
-        // turns text into the format Mallet requires
-        StringBuilder textFormatted = new StringBuilder();
-        for (String word : words) {
-            textFormatted.append(word);
-            textFormatted.append('\n');
-        }
 
         // get the sequence tagging .model file as an InputStream
         Object model = data.getParameter("model");
@@ -135,7 +131,6 @@ public class SequenceTagging implements ProcessingService {
         }
 
         CRF crf;
-        Pipe p;
         try {
             // get trained sequence tagging model
             ObjectInputStream s = new ObjectInputStream(inputStream);
@@ -152,40 +147,37 @@ public class SequenceTagging implements ProcessingService {
         }
 
 
-        // process input
-        p = crf.getInputPipe();
-        p.setTargetProcessing(false);
-        InstanceList instanceList = new InstanceList(p);
-        instanceList.addThruPipe
-                (new LineGroupIterator(new StringReader(textFormatted.toString()),
-                        Pattern.compile("^\\s*$"), true));
+        // turns text into the format Mallet requires
+        int numWords = words.size();
+        Token[] tokens = new Token[numWords];
+        StringBuilder textFormatted = new StringBuilder();
+        for (int i = 0; i < numWords; i++) {
+            textFormatted.append(words.get(i));
+            textFormatted.append(" O"); // give every token the default label
+            textFormatted.append('\n');
+            tokens[i] = new Token(words.get(i));
+        }
 
-        // apply model
-        for (Instance instance : instanceList){
-            Sequence inputs = (Sequence) instance.getData();
-            Sequence[] outputs = apply(crf, inputs, 1);
-            boolean error = false;
-            for (Sequence output : outputs){
-                if (output.size() != inputs.size()){
-                    error = true;
-                }
+        // Turn our text into an instance to be tagged
+        InstanceList il = new InstanceList(crf.getInputPipe());
+        il.addThruPipe(new StringArrayIterator(new String[]{textFormatted.toString()}));
+
+        // Extract our text...
+        Sequence sequence = (Sequence) il.get(0).getData();
+        // ...and tag it using the provided model
+        Sequence outputs = crf.transduce(sequence);
+
+        if (outputs.size() == sequence.size()) { // make sure the output is the right size
+            for (int j = 0; j < sequence.size(); j++) {
+                // add annotations for each token
+                Annotation a = view.newAnnotation("tok" + j, Discriminators.Uri.TOKEN,
+                        starts.get(j), ends.get(j));
+                a.addFeature(Features.Token.WORD, words.get(j));
+                a.addFeature(Features.Token.POS, outputs.get(j).toString());
             }
-            if (!error) {
-                for (int j = 0; j < inputs.size(); j++) {
-
-                    // predicting the POS for each word
-                    StringBuilder buf = new StringBuilder();
-                    for (Sequence output : outputs){
-                        buf.append(output.get(j).toString());
-                    }
-
-                    // adding annotations
-                    Annotation a = view.newAnnotation("tok" + j, Discriminators.Uri.TOKEN,
-                            starts.get(j), ends.get(j));
-                    a.addFeature(Features.Token.WORD, words.get(j));
-                    a.addFeature(Features.Token.POS, buf.toString());
-                }
-            }
+        } else {
+            return new Data<>(Discriminators.Uri.ERROR,
+                    "Results did not match up with input").asJson();
         }
 
         // Step #6: Update the view's metadata. Each view contains metadata about the

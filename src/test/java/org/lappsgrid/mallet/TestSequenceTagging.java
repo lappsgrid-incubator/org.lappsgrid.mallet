@@ -81,13 +81,13 @@ public class TestSequenceTagging {
     public void testExecuteWithParameters() {
         // example text for testing
         final String text =
-                "Research scientists are the primary audience for the journal, but summaries and accompanying articles are intended to make many of the most important papers understandable to scientists in other fields and the educated public. Towards the front of each issue are editorials, news and feature articles on issues of general interest to scientists, including current affairs, science funding, business, scientific ethics and research breakthroughs. There are also sections on books and arts. The remainder of the journal consists mostly of research papers (articles or letters), which are often dense and highly technical. Because of strict limits on the length of papers, often the printed text is actually a summary of the work in question with many details relegated to accompanying supplementary material on the journal's website.";
+                "As you may have heard, video games aren't just for kids anymore. In fact, console games aren't really for kids at all. Outside of Skylanders and Lego games, the vast majority of console games target an older audience, and the failing fortunes of the Wii U have only exacerbated the problem. Nintendo has always been a bit more family friendly than its competition, and analyst DFC intelligence believes that a younger market could be the key to the NX's success.";
 
         // wrap plain text into `Data`
         Data input = new Data<>(Discriminators.Uri.TEXT, text);
 
         // add parameters
-        input.setParameter("model", this.getClass().getResource("/masc_500k_texts(letters).model"));
+        input.setParameter("model", this.getClass().getResource("/masc_500k_texts_word_by_word.model"));
 
         // call `execute()` with jsonized input,
         String string = this.service.execute(input.asJson());

@@ -1,28 +1,23 @@
 package org.lappsgrid.mallet;
 
-import cc.mallet.fst.*;
-import cc.mallet.fst.tests.TestCRF;
-import cc.mallet.optimize.Optimizable;
-import cc.mallet.optimize.tests.TestOptimizable;
-import cc.mallet.pipe.*;
-import cc.mallet.pipe.iterator.ArrayIterator;
-import cc.mallet.pipe.iterator.FileIterator;
+import cc.mallet.fst.CRF;
+import cc.mallet.fst.SimpleTagger;
+import cc.mallet.pipe.Pipe;
 import cc.mallet.pipe.iterator.LineGroupIterator;
-import cc.mallet.pipe.tsf.OffsetConjunctions;
-import cc.mallet.pipe.tsf.TokenText;
 import cc.mallet.types.Alphabet;
-import cc.mallet.types.Instance;
 import cc.mallet.types.InstanceList;
-import cc.mallet.util.CommandOption;
+import cc.mallet.util.ArrayUtils;
 import org.lappsgrid.api.ProcessingService;
 import org.lappsgrid.discriminator.Discriminators;
 import org.lappsgrid.metadata.IOSpecification;
 import org.lappsgrid.metadata.ServiceMetadata;
 import org.lappsgrid.serialization.Data;
+import org.lappsgrid.serialization.Serializer;
 
 import java.io.*;
 import java.util.ArrayList;
-import java.util.Random;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.regex.Pattern;
 
 public class TrainSequenceTagging implements ProcessingService {
@@ -65,68 +60,73 @@ public class TrainSequenceTagging implements ProcessingService {
         return generateMetadata();
     }
 
-
-    CRF crf;
-    Pipe pipe;
-    TransducerEvaluator eval = null;
-    InstanceList testData = null;
-    ArrayList<String> trainingFiles = new ArrayList<String>();
+    ArrayList<String> trainingFiles = new ArrayList<>();
     public String execute(String input) {
-        try{
-            String fileName = input + ".model";
-            File file = new File(fileName);
-            if (file.createNewFile()){
-                pipe = new SimpleTagger.SimpleTaggerSentence2FeatureVectorSequence();
-                pipe.getTargetAlphabet().lookupIndex("O");
-            }
-            else {
-                System.out.println("Model file already exists");
-                return null;
-            }
+        // Step #1: Parse the input.
+        Data data = Serializer.parse(input, Data.class);
 
-            pipe.setTargetProcessing(true);
-            listFilesForFolder(new File(input));
-            for (String filePath : trainingFiles) {
-                InstanceList trainingData = new InstanceList(pipe);
-                Reader inputFile = new FileReader(new File(filePath));
-                trainingData.addThruPipe(new LineGroupIterator(inputFile,
-                        Pattern.compile("^\\s*$"), true));
-                System.out.println("Training: " + filePath);
-                System.out.println("Number of features in training data: " + pipe.getDataAlphabet().size());
-                System.out.println("Number of predicates: " + pipe.getDataAlphabet().size());
+        // Step #2: Check the discriminator
+        final String discriminator = data.getDiscriminator();
+        if (discriminator.equals(Discriminators.Uri.ERROR)) {
+            // Return the input unchanged.
+            return input;
+        }
 
-                if (pipe.isTargetProcessing()) {
-                    Alphabet targets = pipe.getTargetAlphabet();
-                    StringBuffer buf = new StringBuffer("Labels:");
-                    for (int i = 0; i < targets.size(); i++)
-                        buf.append(" ").append(targets.lookupObject(i).toString());
-                    System.out.println(buf.toString());
-                }
+        // Get the directory specified by the parameters in the input
+        String folder = data.getParameter("directory").toString();
 
-                int[] orders = {1};
-                double var = 10.0;
-                crf = SimpleTagger.train(trainingData, testData, eval, orders,
-                        "O", "\\s", ".*",
-                        true, 500, var, crf);
-            }
-            ObjectOutputStream s =
-                    new ObjectOutputStream(new FileOutputStream(file));
-            s.writeObject(crf);
-            s.close();
+        // Get the location to which the model will be written
+        String path = data.getParameter("path").toString();
+        String modelName = data.getParameter("modelName").toString();
+        File file = new File(path + "/" + modelName);
+        if (file.exists()){
+            return new Data<>(Discriminators.Uri.ERROR, "File already exists").asJson();
+        }
 
+        // Populate an ArrayList with the paths to all the .txt files
+        // in the specified directory used for training
+        listFilesForFolder(new File(folder));
 
-        }catch (IOException e) {
-            System.out.println("Failed to create file");
+        File[] sortedTrainingFiles = new File[trainingFiles.size()];
+        for (int i = 0; i < trainingFiles.size(); i++){
+            sortedTrainingFiles[i] = new File(trainingFiles.get(i));
+        }
+        Arrays.sort(sortedTrainingFiles, new FileSizeComparator());
+        for (File f : sortedTrainingFiles) {
+            System.out.println(f);
+        }
+
+        // train first file
+        try {
+            SimpleTagger.main(
+                    new String[]{"--train", "true",
+                            "--model-file", path + "/" + modelName,
+                            sortedTrainingFiles[0].getPath()});
+        } catch (Exception e){
             e.printStackTrace();
-            return null;
-        }/*catch (ClassNotFoundException e) {
-            System.out.println("ClassNotFoundException");
-            return null;
-        }*/
+            return new Data<>(Discriminators.Uri.ERROR, "Error while training data").asJson();
+        }
 
-        //if (trainingFile != null) { try{trainingFile.close();}catch(IOException e){} }
-        return null;
+        int numFiles = sortedTrainingFiles.length;
+
+        // feed rest of the files to the trainer one at a time
+        for (int i = 1; i < numFiles; i++) {
+            try {
+                SimpleTagger.main(
+                        new String[]{"--train", "true",
+                                "--continue-training", "true",
+                                "--model-file", path + "/" + modelName,
+                                sortedTrainingFiles[i].getPath()});
+            } catch (Exception e){
+                e.printStackTrace();
+                return new Data<>(Discriminators.Uri.ERROR, "Error while training data").asJson();
+            }
+        }
+
+        // Success
+        return new Data<>(Discriminators.Uri.TEXT, "Success").asJson();
     }
+
 
     public void listFilesForFolder(final File folder) {
         for (final File fileEntry : folder.listFiles()) {
@@ -136,11 +136,24 @@ public class TrainSequenceTagging implements ProcessingService {
                 String filePath = fileEntry.getPath();
                 String extension = filePath.substring(
                         filePath.lastIndexOf(".") + 1, filePath.length());
-                if (extension.equals("txt")){
+                if (extension.equals("txt")) {
                     trainingFiles.add(filePath);
                 }
             }
+        }
+    }
 
+    // Compares sizes of files in order to sort them by size in descending order
+    public class FileSizeComparator implements Comparator<File> {
+        public int compare( File a, File b ) {
+            long aSize = a.length();
+            long bSize = b.length();
+            if ( aSize == bSize ) {
+                return 0;
+            }
+            else {
+                return Long.compare(bSize, aSize);
+            }
         }
     }
 }
