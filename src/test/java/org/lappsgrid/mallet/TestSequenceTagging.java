@@ -36,7 +36,7 @@ public class TestSequenceTagging {
 
     @Test
     public void testMetadata() {
-        WebService service = new TopicModeling();
+        WebService service = new SequenceTagging();
 
         // Retrieve metadata, remember `getMetadata()` returns a serialized JSON string
         String json = service.getMetadata();
@@ -53,7 +53,7 @@ public class TestSequenceTagging {
         IOSpecification requires = metadata.getRequires();
 
         // Now, see each field has correct value
-        assertEquals("Name is not correct", TopicModeling.class.getName(), metadata.getName());
+        assertEquals("Name is not correct", SequenceTagging.class.getName(), metadata.getName());
         assertEquals("\"allow\" field not equal", Discriminators.Uri.ANY, metadata.getAllow());
         assertEquals("License not correct", Discriminators.Uri.APACHE2, metadata.getLicense());
 

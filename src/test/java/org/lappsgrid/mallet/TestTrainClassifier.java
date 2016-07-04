@@ -6,11 +6,17 @@ import org.junit.Before;
 import org.junit.Test;
 import org.lappsgrid.api.WebService;
 import org.lappsgrid.discriminator.Discriminators;
+import org.lappsgrid.metadata.IOSpecification;
+import org.lappsgrid.metadata.ServiceMetadata;
 import org.lappsgrid.serialization.Data;
+import org.lappsgrid.serialization.Serializer;
 
 import java.io.IOException;
+import java.util.List;
+import java.util.Map;
 
-// more APIs for testing code
+import static org.junit.Assert.*;
+import static org.junit.Assert.assertTrue;
 
 
 public class TestTrainClassifier {
@@ -31,7 +37,32 @@ public class TestTrainClassifier {
     }
 
     @Test
-    public void testMetadata() {  }
+    public void testMetadata() {
+        WebService service = new TrainClassifier();
+
+        // Retrieve metadata, remember `getMetadata()` returns a serialized JSON string
+        String json = service.getMetadata();
+        assertNotNull("service.getMetadata() returned null", json);
+
+        // Instantiate `Data` object with returned JSON string
+        Data data = Serializer.parse(json, Data.class);
+        assertNotNull("Unable to parse metadata json.", data);
+        assertNotSame(data.getPayload().toString(), Discriminators.Uri.ERROR, data.getDiscriminator());
+
+        // Then, convert it into `Metadata` datastructure
+        ServiceMetadata metadata = new ServiceMetadata((Map) data.getPayload());
+        IOSpecification produces = metadata.getProduces();
+        IOSpecification requires = metadata.getRequires();
+
+        // Now, see each field has correct value
+        assertEquals("Name is not correct", TrainClassifier.class.getName(), metadata.getName());
+        assertEquals("\"allow\" field not equal", Discriminators.Uri.ANY, metadata.getAllow());
+        assertEquals("License not correct", Discriminators.Uri.APACHE2, metadata.getLicense());
+
+        List<String> list = requires.getFormat();
+        assertTrue("Text not accepted", list.contains(Discriminators.Uri.TEXT));
+        assertTrue("Required languages do not contain English", requires.getLanguage().contains("en"));
+    }
 
     @Test
     public void testExecute() {

@@ -27,6 +27,7 @@ public class TrainTopicModeling implements ProcessingService
 
         // Populate metadata using setX() methods
         metadata.setName(this.getClass().getName());
+        metadata.setAllow(Discriminators.Uri.ANY);
         metadata.setDescription("Mallet Topic Modeling Trainer");
         metadata.setVersion("1.0.0-SNAPSHOT");
         metadata.setVendor("http://www.lappsgrid.org");
@@ -40,7 +41,6 @@ public class TrainTopicModeling implements ProcessingService
         // JSON for output information
         IOSpecification produces = new IOSpecification();
         produces.addFormat(Discriminators.Uri.LAPPS);          // LIF (form)
-        produces.addAnnotation(Discriminators.Uri.TOKEN);      // Tokens (contents)
         produces.addLanguage("en");             // Target language
 
         // Embed I/O metadata JSON objects

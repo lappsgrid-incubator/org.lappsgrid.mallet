@@ -31,6 +31,7 @@ public class TrainSequenceTagging implements ProcessingService {
 
         // Populate metadata using setX() methods
         metadata.setName(this.getClass().getName());
+        metadata.setAllow(Discriminators.Uri.ANY);
         metadata.setDescription("Mallet Sequence Tagging Trainer");
         metadata.setVersion("1.0.0-SNAPSHOT");
         metadata.setVendor("http://www.lappsgrid.org");
@@ -44,8 +45,7 @@ public class TrainSequenceTagging implements ProcessingService {
         // JSON for output information
         IOSpecification produces = new IOSpecification();
         produces.addFormat(Discriminators.Uri.LAPPS);          // LIF (form)
-        produces.addAnnotation(Discriminators.Uri.TOKEN);      // Tokens (contents)
-        requires.addLanguage("en");             // Target language
+        produces.addLanguage("en");             // Target language
 
         // Embed I/O metadata JSON objects
         metadata.setRequires(requires);
@@ -143,7 +143,7 @@ public class TrainSequenceTagging implements ProcessingService {
         }
     }
 
-    // Compares sizes of files in order to sort them by size in descending order
+    // Compares sizes of files in order to sort them by size in ascending order
     public class FileSizeComparator implements Comparator<File> {
         public int compare( File a, File b ) {
             long aSize = a.length();
