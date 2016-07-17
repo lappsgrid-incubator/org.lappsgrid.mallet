@@ -4,7 +4,6 @@ import cc.mallet.fst.CRF;
 import cc.mallet.pipe.iterator.StringArrayIterator;
 import cc.mallet.types.InstanceList;
 import cc.mallet.types.Sequence;
-import cc.mallet.types.Token;
 import org.apache.axis.Version;
 import org.lappsgrid.api.ProcessingService;
 import org.lappsgrid.discriminator.Discriminators;
@@ -24,7 +23,6 @@ import java.io.ObjectInputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -184,58 +182,5 @@ public class SequenceTagging implements ProcessingService {
         // Step #8: Serialize the data object and return the JSON.
         return data.asPrettyJson();
 
-    }
-
-    public void tokenize(String text) {
-        // initialization of variables needed for tokenization
-        int charCount = 0, start = 0, end;
-        StringBuilder token = new StringBuilder();
-        char[] punctuation = ":;.!?\'\"(){}[]".toCharArray();
-
-        // iterate through the text to tokenize
-        for (char ch : text.toCharArray()) {
-            if (Character.isLetter(ch)) { // process letters
-                token.append(ch);
-            } else if (Character.isSpaceChar(ch)) { // process space chars
-                if (token.length() > 0) {
-                    end = charCount - 1;
-                    addToken(token, start, end);
-                    token = new StringBuilder();
-                }
-                start = charCount + 1;
-            } else if (ch == '\'' && token.length() > 0) { // process contractions
-                end = charCount - 1;
-                addToken(token, start, end);
-                token = new StringBuilder();
-                token.append('\'');
-                start = charCount;
-            } else if (Arrays.binarySearch(punctuation, ch) != -1) { // process punctuation
-                if (token.length() > 0) {
-                    end = charCount - 1;
-                    addToken(token, start, end);
-                }
-                start = charCount;
-                addToken(ch, start);
-                token = new StringBuilder();
-                start = charCount + 1;
-            }
-            charCount++;
-        }
-        if (token.length() > 0) { // process last token
-            end = charCount - 1;
-            addToken(token, start, end);
-        }
-    }
-
-    public void addToken(StringBuilder token, int start, int end) {
-        words.add(token.toString());
-        starts.add(start);
-        ends.add(end);
-    }
-
-    public void addToken(char ch, int start) {
-        words.add(Character.toString(ch));
-        starts.add(start);
-        ends.add(start);
     }
 }
