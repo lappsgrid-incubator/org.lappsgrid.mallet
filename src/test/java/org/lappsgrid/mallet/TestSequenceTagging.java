@@ -8,14 +8,18 @@ import org.lappsgrid.discriminator.Discriminators;
 import org.lappsgrid.metadata.IOSpecification;
 import org.lappsgrid.metadata.ServiceMetadata;
 import org.lappsgrid.serialization.Data;
+import org.lappsgrid.serialization.DataContainer;
 import org.lappsgrid.serialization.Serializer;
+import org.lappsgrid.serialization.lif.Annotation;
+import org.lappsgrid.serialization.lif.Container;
+import org.lappsgrid.serialization.lif.View;
+import org.lappsgrid.vocabulary.Features;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
 import static org.junit.Assert.*;
-import static org.junit.Assert.assertTrue;
 
 public class TestSequenceTagging {
 
@@ -64,33 +68,83 @@ public class TestSequenceTagging {
 
     @Test
     public void testExecute() {
-        // example text for testing
-        final String text =
-                "Research scientists are the primary audience for the journal, but summaries and accompanying articles are intended to make many of the most important papers understandable to scientists in other fields and the educated public. Towards the front of each issue are editorials, news and feature articles on issues of general interest to scientists, including current affairs, science funding, business, scientific ethics and research breakthroughs. There are also sections on books and arts. The remainder of the journal consists mostly of research papers (articles or letters), which are often dense and highly technical. Because of strict limits on the length of papers, often the printed text is actually a summary of the work in question with many details relegated to accompanying supplementary material on the journal's website.";
+        // Entering the tokens for "Don't count the days. Make the days count." into a Data object
+        Container container = new Container();
+        container.setText("Don't count the days. Make the days count.");
+        View view = container.newView();
+        Annotation a;
 
-        // wrap plain text into `Data`
-        Data input = new Data<>(Discriminators.Uri.TEXT, text);
+        a = view.newAnnotation("tok0", Discriminators.Uri.TOKEN, 0, 2);
+        a.addFeature(Features.Token.WORD, "Don");
+        a = view.newAnnotation("tok1", Discriminators.Uri.TOKEN, 3, 4);
+        a.addFeature(Features.Token.WORD, "'t");
+        a = view.newAnnotation("tok2", Discriminators.Uri.TOKEN, 6, 10);
+        a.addFeature(Features.Token.WORD, "count");
+        a = view.newAnnotation("tok3", Discriminators.Uri.TOKEN, 12, 14);
+        a.addFeature(Features.Token.WORD, "the");
+        a = view.newAnnotation("tok0", Discriminators.Uri.TOKEN, 16, 19);
+        a.addFeature(Features.Token.WORD, "days");
+        a = view.newAnnotation("tok0", Discriminators.Uri.TOKEN, 20, 20);
+        a.addFeature(Features.Token.WORD, ".");
+        a = view.newAnnotation("tok0", Discriminators.Uri.TOKEN, 22, 25);
+        a.addFeature(Features.Token.WORD, "Make");
+        a = view.newAnnotation("tok0", Discriminators.Uri.TOKEN, 27, 29);
+        a.addFeature(Features.Token.WORD, "the");
+        a = view.newAnnotation("tok0", Discriminators.Uri.TOKEN, 31, 34);
+        a.addFeature(Features.Token.WORD, "days");
+        a = view.newAnnotation("tok0", Discriminators.Uri.TOKEN, 36, 40);
+        a.addFeature(Features.Token.WORD, "count");
+        a = view.newAnnotation("tok0", Discriminators.Uri.TOKEN, 41, 41);
+        a.addFeature(Features.Token.WORD, ".");
+
+        Data data = new DataContainer(container);
+        data.setDiscriminator(Discriminators.Uri.TOKEN);
 
         // call `execute()` with jsonized input,
-        String string = this.service.execute(input.asJson());
+        String string = this.service.execute(data.asJson());
 
         System.out.println(string);
     }
 
     @Test
     public void testExecuteWithParameters() {
-        // example text for testing
-        final String text =
-                "As you may have heard, video games aren't just for kids anymore. In fact, console games aren't really for kids at all. Outside of Skylanders and Lego games, the vast majority of console games target an older audience, and the failing fortunes of the Wii U have only exacerbated the problem. Nintendo has always been a bit more family friendly than its competition, and analyst DFC intelligence believes that a younger market could be the key to the NX's success.";
+        // Entering the tokens for "Don't count the days. Make the days count." into a Data object
+        Container container = new Container();
+        container.setText("Don't count the days. Make the days count.");
+        View view = container.newView();
+        Annotation a;
 
-        // wrap plain text into `Data`
-        Data input = new Data<>(Discriminators.Uri.TEXT, text);
+        a = view.newAnnotation("tok0", Discriminators.Uri.TOKEN, 0, 2);
+        a.addFeature(Features.Token.WORD, "Don");
+        a = view.newAnnotation("tok1", Discriminators.Uri.TOKEN, 3, 4);
+        a.addFeature(Features.Token.WORD, "'t");
+        a = view.newAnnotation("tok2", Discriminators.Uri.TOKEN, 6, 10);
+        a.addFeature(Features.Token.WORD, "count");
+        a = view.newAnnotation("tok3", Discriminators.Uri.TOKEN, 12, 14);
+        a.addFeature(Features.Token.WORD, "the");
+        a = view.newAnnotation("tok0", Discriminators.Uri.TOKEN, 16, 19);
+        a.addFeature(Features.Token.WORD, "days");
+        a = view.newAnnotation("tok0", Discriminators.Uri.TOKEN, 20, 20);
+        a.addFeature(Features.Token.WORD, ".");
+        a = view.newAnnotation("tok0", Discriminators.Uri.TOKEN, 22, 25);
+        a.addFeature(Features.Token.WORD, "Make");
+        a = view.newAnnotation("tok0", Discriminators.Uri.TOKEN, 27, 29);
+        a.addFeature(Features.Token.WORD, "the");
+        a = view.newAnnotation("tok0", Discriminators.Uri.TOKEN, 31, 34);
+        a.addFeature(Features.Token.WORD, "days");
+        a = view.newAnnotation("tok0", Discriminators.Uri.TOKEN, 36, 40);
+        a.addFeature(Features.Token.WORD, "count");
+        a = view.newAnnotation("tok0", Discriminators.Uri.TOKEN, 41, 41);
+        a.addFeature(Features.Token.WORD, ".");
+
+        Data data = new DataContainer(container);
+        data.setDiscriminator(Discriminators.Uri.TOKEN);
 
         // add parameters
-        input.setParameter("model", this.getClass().getResource("/masc_500k_texts_word_by_word.model"));
+        data.setParameter("model", this.getClass().getResource("/masc_500k_texts_word_by_word.model"));
 
         // call `execute()` with jsonized input,
-        String string = this.service.execute(input.asJson());
+        String string = this.service.execute(data.asJson());
 
         System.out.println(string);
     }

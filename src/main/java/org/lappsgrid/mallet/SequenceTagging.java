@@ -25,6 +25,7 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 
 
@@ -46,13 +47,13 @@ public class SequenceTagging implements ProcessingService {
 
         // JSON for input information
         IOSpecification requires = new IOSpecification();
-        requires.addFormat(Discriminators.Uri.TEXT);           // Plain text (form)
+        requires.addFormat(Discriminators.Uri.TOKEN);           // Plain text (form)
         requires.addLanguage("en");             // Source language
 
         // JSON for output information
         IOSpecification produces = new IOSpecification();
         produces.addFormat(Discriminators.Uri.LAPPS);          // LIF (form)
-        produces.addAnnotation(Discriminators.Uri.TOKEN);      // Tokens (contents)
+        produces.addAnnotation(Discriminators.Uri.POS);      // Tokens (contents)
         produces.addLanguage("en");             // Target language
 
         // Embed I/O metadata JSON objects
@@ -84,12 +85,10 @@ public class SequenceTagging implements ProcessingService {
             return input;
         }
 
-        // Step #3: Extract the text.
+        // Step #3: Extract the data.
         Container container;
-        if (discriminator.equals(Discriminators.Uri.TEXT)) {
-            container = new Container();
-            container.setText(data.getPayload().toString());
-        } else if (discriminator.equals(Discriminators.Uri.LAPPS)) {
+        if (discriminator.equals(Discriminators.Uri.TOKEN) ||
+                discriminator.equals(Discriminators.Uri.LAPPS)) {
             container = new Container((Map) data.getPayload());
         } else {
             // This is a format we don't accept.
@@ -97,16 +96,19 @@ public class SequenceTagging implements ProcessingService {
             return new Data<>(Discriminators.Uri.ERROR, message).asJson();
         }
 
-        // Step #4: Create a new View
-        View view = container.newView();
-
-        // Get the text from the container
-        String text = container.getText();
-
-
-        // tokenize the text. tokens go into the String[] words
-        // the starts and ends are stored in an int[]
-        tokenize(text);
+        // Get the tokens from the input and turn them into Mallet's desired format
+        View view = new View(container.getView(0));
+        List<Annotation> annotations = view.getAnnotations();
+        int numTokens = annotations.size();
+        StringBuilder textFormatted = new StringBuilder();
+        for (int i = 0; i < numTokens; i++) {
+            String token = annotations.get(i).getFeature("word");
+            if (token != null) {
+                textFormatted.append(token);
+                textFormatted.append(" O"); // give every token the default label
+                textFormatted.append('\n');
+            }
+        }
 
         // get the sequence tagging .model file as an InputStream
         Object model = data.getParameter("model");
@@ -146,18 +148,6 @@ public class SequenceTagging implements ProcessingService {
             return new Data<>(Discriminators.Uri.ERROR, message).asJson();
         }
 
-
-        // turns text into the format Mallet requires
-        int numWords = words.size();
-        Token[] tokens = new Token[numWords];
-        StringBuilder textFormatted = new StringBuilder();
-        for (int i = 0; i < numWords; i++) {
-            textFormatted.append(words.get(i));
-            textFormatted.append(" O"); // give every token the default label
-            textFormatted.append('\n');
-            tokens[i] = new Token(words.get(i));
-        }
-
         // Turn our text into an instance to be tagged
         InstanceList il = new InstanceList(crf.getInputPipe());
         il.addThruPipe(new StringArrayIterator(new String[]{textFormatted.toString()}));
@@ -167,26 +157,29 @@ public class SequenceTagging implements ProcessingService {
         // ...and tag it using the provided model
         Sequence outputs = crf.transduce(sequence);
 
+        View resultsView = new View();
         if (outputs.size() == sequence.size()) { // make sure the output is the right size
             for (int j = 0; j < sequence.size(); j++) {
                 // add annotations for each token
-                Annotation a = view.newAnnotation("tok" + j, Discriminators.Uri.TOKEN,
-                        starts.get(j), ends.get(j));
-                a.addFeature(Features.Token.WORD, words.get(j));
+                Annotation a = annotations.get(j);
                 a.addFeature(Features.Token.POS, outputs.get(j).toString());
+                resultsView.add(a);
             }
         } else {
             return new Data<>(Discriminators.Uri.ERROR,
-                    "Results did not match up with input").asJson();
+                    "Size of the result did not match up with the input size").asJson();
         }
 
         // Step #6: Update the view's metadata. Each view contains metadata about the
         // annotations it contains, in particular the name of the tool that produced the
         // annotations.
-        view.addContains(Discriminators.Uri.POS, this.getClass().getName(), "part of speech");
+        resultsView.addContains(Discriminators.Uri.POS, this.getClass().getName(), "part of speech");
 
         // Step #7: Create a DataContainer with the result.
-        data = new DataContainer(container);
+        Container resultsContainer= new Container();
+        resultsContainer.setText(container.getText());
+        resultsContainer.addView(resultsView);
+        data = new DataContainer(resultsContainer);
 
         // Step #8: Serialize the data object and return the JSON.
         return data.asPrettyJson();
