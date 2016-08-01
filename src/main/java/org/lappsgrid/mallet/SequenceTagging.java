@@ -100,7 +100,7 @@ public class SequenceTagging implements ProcessingService {
         int numTokens = annotations.size();
         StringBuilder textFormatted = new StringBuilder();
         for (int i = 0; i < numTokens; i++) {
-            String token = annotations.get(i).getFeature("word");
+            String token = annotations.get(i).getFeature(Features.Token.WORD);
             if (token != null) {
                 textFormatted.append(token);
                 textFormatted.append(" O"); // give every token the default label
