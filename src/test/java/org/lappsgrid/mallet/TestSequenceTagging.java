@@ -122,19 +122,19 @@ public class TestSequenceTagging {
         a.addFeature(Features.Token.WORD, "count");
         a = view.newAnnotation("tok3", Discriminators.Uri.TOKEN, 12, 14);
         a.addFeature(Features.Token.WORD, "the");
-        a = view.newAnnotation("tok0", Discriminators.Uri.TOKEN, 16, 19);
+        a = view.newAnnotation("tok4", Discriminators.Uri.TOKEN, 16, 19);
         a.addFeature(Features.Token.WORD, "days");
-        a = view.newAnnotation("tok0", Discriminators.Uri.TOKEN, 20, 20);
+        a = view.newAnnotation("tok5", Discriminators.Uri.TOKEN, 20, 20);
         a.addFeature(Features.Token.WORD, ".");
-        a = view.newAnnotation("tok0", Discriminators.Uri.TOKEN, 22, 25);
+        a = view.newAnnotation("tok6", Discriminators.Uri.TOKEN, 22, 25);
         a.addFeature(Features.Token.WORD, "Make");
-        a = view.newAnnotation("tok0", Discriminators.Uri.TOKEN, 27, 29);
+        a = view.newAnnotation("tok7", Discriminators.Uri.TOKEN, 27, 29);
         a.addFeature(Features.Token.WORD, "the");
-        a = view.newAnnotation("tok0", Discriminators.Uri.TOKEN, 31, 34);
+        a = view.newAnnotation("tok8", Discriminators.Uri.TOKEN, 31, 34);
         a.addFeature(Features.Token.WORD, "days");
-        a = view.newAnnotation("tok0", Discriminators.Uri.TOKEN, 36, 40);
+        a = view.newAnnotation("tok9", Discriminators.Uri.TOKEN, 36, 40);
         a.addFeature(Features.Token.WORD, "count");
-        a = view.newAnnotation("tok0", Discriminators.Uri.TOKEN, 41, 41);
+        a = view.newAnnotation("tok10", Discriminators.Uri.TOKEN, 41, 41);
         a.addFeature(Features.Token.WORD, ".");
 
         Data data = new DataContainer(container);

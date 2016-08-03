@@ -6,11 +6,14 @@ import cc.mallet.pipe.iterator.StringArrayIterator;
 import cc.mallet.types.Labeling;
 import org.apache.axis.Version;
 import org.lappsgrid.api.ProcessingService;
+import org.lappsgrid.discriminator.Discriminators;
 import org.lappsgrid.discriminator.Discriminators.Uri;
 import org.lappsgrid.metadata.IOSpecification;
 import org.lappsgrid.metadata.ServiceMetadata;
 import org.lappsgrid.serialization.Data;
+import org.lappsgrid.serialization.DataContainer;
 import org.lappsgrid.serialization.Serializer;
+import org.lappsgrid.serialization.lif.Annotation;
 import org.lappsgrid.serialization.lif.Container;
 import org.lappsgrid.serialization.lif.View;
 
@@ -64,17 +67,17 @@ public class DocumentClassification implements ProcessingService {
     }
 
     public String execute(String input) {
-        // Step #1: Parse the input.
+        // Parse the input.
         Data data = Serializer.parse(input, Data.class);
 
-        // Step #2: Check the discriminator
+        // Check the discriminator
         final String discriminator = data.getDiscriminator();
         if (discriminator.equals(Uri.ERROR)) {
             // Return the input unchanged.
             return input;
         }
 
-        // Step #3: Extract the text.
+        // Extract the text.
         Container container;
         if (discriminator.equals(Uri.TEXT)) {
             container = new Container();
@@ -87,7 +90,7 @@ public class DocumentClassification implements ProcessingService {
             return new Data<>(Uri.ERROR, message).asJson();
         }
 
-        // Step #4: Create a new View
+        // Create a new View
         View view = container.newView();
 
         // Get input text
@@ -133,31 +136,27 @@ public class DocumentClassification implements ProcessingService {
             return new Data<>(Uri.ERROR, message).asJson();
         }
 
-        // map to store the probability of the input being each document type
-        Map<String, Double> typeProbability = new HashMap<>();
 
+        // classify and produce output
         Iterator instances =
                 c.getInstancePipe().newIteratorFrom(sai);
         while (instances.hasNext()) {
             Labeling labeling = c.classify(instances.next()).getLabeling();
 
-            // print the labels with their weights in descending order (ie best first)
             for (int rank = 0; rank < labeling.numLocations(); rank++) {
-                typeProbability.put(labeling.getLabelAtRank(rank).toString(), labeling.getValueAtRank(rank));
+                Annotation a = new Annotation();
+                a.setId("documentType" + rank);
+                a.addFeature("documentType" , labeling.getLabelAtRank(rank).toString());
+                a.addFeature("probability", Double.toString(labeling.getValueAtRank(rank)));
+                view.add(a);
             }
         }
-        data = new Data<Map>(Uri.JSON, typeProbability);
+        view.addContains("document types", this.getClass().getName(), "document-types:mallet");
+        Map parameters = data.getParameters();
+        data = new DataContainer(container);
+        data.setDiscriminator(Discriminators.Uri.JSON);
+        data.setParameters(parameters);
 
-
-        // Step #6: Update the view's metadata. Each view contains metadata about the
-        // annotations it contains, in particular the name of the tool that produced the
-        // annotations.
-        view.addContains(Uri.TOKEN, this.getClass().getName(), "labels");
-
-        // Step #7: Create a DataContainer with the result.
-//        data = new DataContainer(container);
-
-        // Step #8: Serialize the data object and return the JSON.
         return data.asPrettyJson();
     }
 }

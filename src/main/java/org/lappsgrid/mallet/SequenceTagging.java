@@ -22,7 +22,6 @@ import java.io.InputStream;
 import java.io.ObjectInputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -45,7 +44,7 @@ public class SequenceTagging implements ProcessingService {
 
         // JSON for input information
         IOSpecification requires = new IOSpecification();
-        requires.addFormat(Discriminators.Uri.TOKEN);           // Plain text (form)
+        requires.addFormat(Discriminators.Uri.TOKEN);
         requires.addLanguage("en");             // Source language
 
         // JSON for output information
@@ -67,23 +66,18 @@ public class SequenceTagging implements ProcessingService {
         return generateMetadata();
     }
 
-    // ArrayLists for holding information about tokens
-    ArrayList<String> words = new ArrayList<>();
-    ArrayList<Integer> starts = new ArrayList<>();
-    ArrayList<Integer> ends = new ArrayList<>();
-
     public String execute(String input) {
-        // Step #1: Parse the input.
+        // Parse the input.
         Data data = Serializer.parse(input, Data.class);
 
-        // Step #2: Check the discriminator
+        // Check the discriminator
         final String discriminator = data.getDiscriminator();
         if (discriminator.equals(Discriminators.Uri.ERROR)) {
             // Return the input unchanged.
             return input;
         }
 
-        // Step #3: Extract the data.
+        // Extract the data.
         Container container;
         if (discriminator.equals(Discriminators.Uri.TOKEN) ||
                 discriminator.equals(Discriminators.Uri.LAPPS)) {
@@ -160,6 +154,7 @@ public class SequenceTagging implements ProcessingService {
             for (int j = 0; j < sequence.size(); j++) {
                 // add annotations for each token
                 Annotation a = annotations.get(j);
+                a.setAtType(Discriminators.Uri.POS);
                 a.addFeature(Features.Token.POS, outputs.get(j).toString());
                 resultsView.add(a);
             }
@@ -168,18 +163,11 @@ public class SequenceTagging implements ProcessingService {
                     "Size of the result did not match up with the input size").asJson();
         }
 
-        // Step #6: Update the view's metadata. Each view contains metadata about the
-        // annotations it contains, in particular the name of the tool that produced the
-        // annotations.
-        resultsView.addContains(Discriminators.Uri.POS, this.getClass().getName(), "part of speech");
+        resultsView.addContains(Discriminators.Uri.POS, this.getClass().getName(), "pos:mallet");
 
-        // Step #7: Create a DataContainer with the result.
-        Container resultsContainer= new Container();
-        resultsContainer.setText(container.getText());
-        resultsContainer.addView(resultsView);
-        data = new DataContainer(resultsContainer);
-
-        // Step #8: Serialize the data object and return the JSON.
+        container = new Container();
+        container.addView(resultsView);
+        data = new DataContainer(container);
         return data.asPrettyJson();
 
     }
