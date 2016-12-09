@@ -62,7 +62,7 @@ public class TestSequenceTagging {
         assertEquals("License not correct", Discriminators.Uri.APACHE2, metadata.getLicense());
 
         List<String> list = requires.getFormat();
-        assertTrue("Text not accepted", list.contains(Discriminators.Uri.TEXT));
+        assertTrue("Tokens not accepted", list.contains(Discriminators.Uri.TOKEN));
         assertTrue("Required languages do not contain English", requires.getLanguage().contains("en"));
     }
 
