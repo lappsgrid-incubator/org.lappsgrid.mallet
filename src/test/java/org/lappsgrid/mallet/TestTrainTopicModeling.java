@@ -69,7 +69,7 @@ public class TestTrainTopicModeling {
         Data input = new Data<>(Discriminators.Uri.TEXT, "");
 
         // add parameters
-        input.setParameter("directory", "src/test/resources/masc_500k_texts");
+        input.setParameter("directory", this.getClass().getResource("/masc_500k_texts").getPath());
         input.setParameter("path", "models");
         input.setParameter("inferencerName", "masc_500k_texts_topics.inferencer");
         input.setParameter("keysName", "masc_500k_texts_topic_keys.txt");

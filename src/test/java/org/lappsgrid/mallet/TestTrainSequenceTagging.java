@@ -68,7 +68,7 @@ public class TestTrainSequenceTagging {
         Data input = new Data<>(Discriminators.Uri.TEXT, "");
 
         // add parameters
-        input.setParameter("directory", "masc_500k_texts_word_by_word");
+        input.setParameter("directory", this.getClass().getResource("/masc_500k_texts_word_by_word"));
         input.setParameter("path", "models");
         input.setParameter("modelName", "masc_500k_texts_word_by_word234.model");
         
