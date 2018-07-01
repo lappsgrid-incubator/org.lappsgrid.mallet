@@ -2,22 +2,22 @@
 This repository contains NLP tools from UMASS Amherst. There are in total 6 tools. The tools are a document classifier, a sequence tagger, and a topic modeler plus their respective trainers. 
 
 # Input
-Each tool except the Sequence Tagger requires a LAPPS Grid Data object with the discriminator: [Discriminators.Uri.TEXT](http://vocab.lappsgrid.org/ns/media/text) and the text in the payload. The text in the payload for the non-trainer tools is the text we wish to be analyzed. The text in the payload for the trainer tools is not used so it can be ```null```. The Sequence Tagger requires [Discriminators.Uri.TOKEN](http://vocab.lappsgrid.org/Token) as the discriminator and appropriate tokens in the Data object.
+Each tool except the Sequence Tagger requires a LAPPS Grid Data object with the discriminator: [Discriminators.Uri.TEXT](http://vocab.lappsgrid.org/ns/media/text) and the text in the payload. The text in the payload for the non-trainer tools is the text we wish to be analyzed. The text in the payload for the trainer tools is not used so it can be `null`. The Sequence Tagger requires [Discriminators.Uri.TOKEN](http://vocab.lappsgrid.org/Token) as the discriminator and appropriate tokens in the Data object.
 
-##Parameters
+## Parameters
 Each tool will also require a few parameters.
 
-###Document Classifier
+### Document Classifier
 |Parameter Name|Description|Default Value|
 | --- | --- | --- |
 |classifier| The path to the classifier model | "/masc_500k_texts.classifier" |
 
-###Sequence Tagger
+### Sequence Tagger
 |Parameter Name|Description|Default Value|
 | --- | --- | --- |
 |model| The path to the sequence tagger model | "/masc_500k_texts.model" |
 
-###Topic Modeler
+### Topic Modeler
 |Parameter Name|Description|Default Value|
 | --- | --- | --- |
 |inferencer| The path to the topic modeler model | "/masc_500k_texts.inferencer" |
@@ -26,7 +26,7 @@ Each tool will also require a few parameters.
 |burnIn| Percentage burn-in | 10 |
 |thinning| The thinning interval | 10 |
 
-###Document Classifier Trainer
+### Document Classifier Trainer
 |Parameter Name|Description|Default Value|
 | --- | --- | --- |
 |directory| The directory in which the .txt files used for training are held | null |
@@ -34,14 +34,14 @@ Each tool will also require a few parameters.
 |classifierName| The name of the classifier file (e.g. "masc_500k_texts.classifier") to be written | null
 |trainer| The type of train to be used. The choices are "NaiveBayes", "MaxEnt", "BalancedWinnow", "C45", "DecisionTree", "MaxEntL1", "MCMaxEnt", "NaiveBayesEMT", "Winnow". | "NaiveBayes"|
 
-###Sequence Tagger Trainer
+### Sequence Tagger Trainer
 |Parameter Name|Description|Default Value|
 | --- | --- | --- |
 |directory| The directory in which the .txt files used for training are held | null |
 |path| The directory in which the model will be written | null|
 |modelName| The name of the sequence tagger model file (e.g. "masc_500k_texts.model") to be written | null
 
-###Topic Modeler Trainer
+### Topic Modeler Trainer
 |Parameter Name|Description|Default Value|
 | --- | --- | --- |
 |directory| The directory in which the .txt files used for training are held | null |
@@ -51,15 +51,16 @@ Each tool will also require a few parameters.
 |numTopics| The number of topics (group of similar words) to be created | null|
 |wordsPerTopic| The number of words in each topic | null|
 
-#Output
+# Output
 
 All trainers will return ``{"discriminator":"http://vocab.lappsgrid.org/ns/media/text","payload":"Success"}`` if trainer was successful.
 
-##Document Classifier
+## Document Classifier
 The document classifier will return Data with a [JSON](http://vocab.lappsgrid.org/ns/media/json) discriminator. The output will be annotations for each document type the classifier was trained for and the probability that the text in our payload is of that document type.
 
 <details>
 <summary>Example Output</summary>
+
 ```json
 {
   "discriminator" : "http://vocab.lappsgrid.org/ns/media/json",
@@ -206,14 +207,16 @@ The document classifier will return Data with a [JSON](http://vocab.lappsgrid.or
   }
 }
 ```
+
 </details>
 
-##Sequence Tagger
+## Sequence Tagger
 The Sequence Tagger will produce annotations with [part of speech tokens](http://vocab.lappsgrid.org/Token#pos) along with their start and end positions.
 
 <details>
 <summary>Example Output</summary>
-````json
+
+```json
 {
   "discriminator" : "http://vocab.lappsgrid.org/ns/media/jsonld#lif",
   "payload" : {
@@ -333,15 +336,17 @@ The Sequence Tagger will produce annotations with [part of speech tokens](http:/
   },
   "parameters" : { }
 }
-````
+```
+
 </details>
 
-##Topic Modeler
+## Topic Modeler
 The Topic Modeler produces annotations for each topic the inferencer file was trained for, along with the proportion of our text in the payload that pertains to that topic.
 
 <details>
 <summary>Example Output</summary>
-````json
+
+```json
 {
   "discriminator" : "http://vocab.lappsgrid.org/ns/media/json",
   "payload" : {
@@ -490,5 +495,6 @@ The Topic Modeler produces annotations for each topic the inferencer file was tr
     "burnIn" : 10
   }
 }
-````
+```
+
 </details>
